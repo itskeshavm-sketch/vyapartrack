@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: vyapartrack
+    runtime: node
+    rootDir: server
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 20.11.1
+      - key: POOLSIDE_API_KEY
+        sync: false
+      - key: POOLSIDE_MODEL
+        value: poolside/laguna-xs-2.1
+      - key: POOLSIDE_BASE_URL
+        value: https://inference.poolside.ai/v1
+      - key: API_TOKEN
+        generateValue: true
+      - key: AUTO_REPLY
+        value: "true"
+    disk:
+      name: vyapar-data
+      mountPath: /opt/render/project/src/server/data
+      sizeGB: 1

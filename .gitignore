@@ -1,0 +1,26 @@
+node_modules/
+.env
+auth/
+data/orders.json
+data/*.json
+*.log
+out.log
+err.log
+
+# Old / built APKs - the latest is committed to the repo root
+VyaparTrack-v*-debug.apk
+!VyaparTrack-v2.3-onetap-debug.apk
+
+# Android build artifacts
+android/app/build/
+android/.gradle/
+android/.cxx/
+android/build/
+android/local.properties
+*.iml
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+.wwebjs_auth/

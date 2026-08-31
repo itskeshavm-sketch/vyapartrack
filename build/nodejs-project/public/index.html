@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VyaparTrack · WhatsApp Business Tracker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="bg-glow"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-icon">₹</div>
+      <div>
+        <h1>VyaparTrack</h1>
+        <p>WhatsApp business tracker</p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <div id="botStatus" class="status-pill offline">
+        <span class="dot"></span><span id="botStatusText">Checking…</span>
+      </div>
+      <div id="aiStatus" class="status-pill ai">
+        <span class="dot"></span><span>AI parser</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section id="setupPanel" class="panel setup-panel hidden">
+      <div class="panel-head">
+        <h2>🔗 Connect your WhatsApp</h2>
+        <span class="hint">One-time setup · session is saved</span>
+      </div>
+      <div class="setup-body">
+        <div class="setup-step">
+          <h3>Option A · Pairing code (use this on your phone)</h3>
+          <p>1. Enter your WhatsApp number → get a code<br>
+             2. WhatsApp → <b>Settings → Linked Devices → Link a Device</b><br>
+             3. Tap <b>“Link with phone number instead”</b> → type the code</p>
+          <div class="pair-row">
+            <input id="phoneInput" type="tel" inputmode="numeric" placeholder="e.g. 9876543210" />
+            <button id="pairBtn" type="button">Get code</button>
+          </div>
+          <div id="pairResult" class="pair-result hidden">
+            <span class="pair-label">Your code:</span>
+            <span id="pairCode" class="pair-code"></span>
+          </div>
+          <div id="pairError" class="form-result err hidden"></div>
+        </div>
+        <div class="setup-step">
+          <h3>Option B · Scan QR (if you're on a computer)</h3>
+          <div id="qrBox" class="qr-box">
+            <img id="qrImage" alt="WhatsApp QR" />
+            <span id="qrWait" class="muted">Waiting for QR…</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="stats-grid">
+      <div class="stat-card">
+        <span class="stat-label">Total Orders</span>
+        <span class="stat-value" id="statOrders">0</span>
+        <span class="stat-sub">tracked automatically</span>
+      </div>
+      <div class="stat-card accent-green">
+        <span class="stat-label">Revenue</span>
+        <span class="stat-value" id="statRevenue">₹0</span>
+        <span class="stat-sub">total billed</span>
+      </div>
+      <div class="stat-card accent-gold">
+        <span class="stat-label">Profit</span>
+        <span class="stat-value" id="statProfit">₹0</span>
+        <span class="stat-sub" id="statMargin">0% avg margin</span>
+      </div>
+      <div class="stat-card accent-violet">
+        <span class="stat-label">Cost Spent</span>
+        <span class="stat-value" id="statCost">₹0</span>
+        <span class="stat-sub">money invested</span>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>➕ Add / Test Order</h2>
+        <span class="hint">Type it exactly like a WhatsApp message</span>
+      </div>
+      <form id="orderForm" class="order-form">
+        <input id="orderText" type="text" autocomplete="off"
+          placeholder='e.g. Order from Mayank, 500 grams ladoo, +15% profit, total cost of ladoo = 200 rupees' />
+        <button type="submit">Track Order</button>
+      </form>
+      <div id="formResult" class="form-result hidden"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>🧾 Orders</h2>
+        <div class="panel-actions">
+          <button id="demoBtn" class="btn-ghost">Load demo data</button>
+          <button id="refreshBtn" class="btn-ghost">Refresh</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Customer</th>
+              <th>Item</th>
+              <th>Qty</th>
+              <th>Cost</th>
+              <th>Profit %</th>
+              <th>Profit</th>
+              <th>Total</th>
+              <th>Time</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="ordersBody">
+            <tr><td colspan="9" class="empty">No orders yet. Connect WhatsApp or load demo data.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer>VyaparTrack · built for Indian businesses · data stays on your machine</footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+{
+  "name": "whatsapp-biz-tracker",
+  "version": "1.0.0",
+  "description": "Connects to your WhatsApp and automatically tracks business orders, costs, profit margins and totals - built for local Indian businesses.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "server": "node src/server.js",
+    "test:parser": "node scripts/test-parser.js",
+    "demo": "node scripts/seed-demo.js"
+  },
+  "keywords": [
+    "whatsapp",
+    "business",
+    "orders",
+    "profit",
+    "tracker",
+    "india"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@whiskeysockets/baileys": "^7.0.0-rc14",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "qrcode": "^1.5.4"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

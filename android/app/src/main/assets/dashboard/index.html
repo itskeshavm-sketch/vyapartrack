@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VyaparTrack · Order Tracker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="bg-glow"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-icon">₹</div>
+      <div>
+        <h1>VyaparTrack</h1>
+        <p>AI-powered order tracker · data stays on your phone</p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <button id="settingsBtn" class="btn-ghost" title="Poolside API key &amp; setup">⚙ Settings</button>
+      <div id="aiStatus" class="status-pill ai">
+        <span class="dot"></span><span id="aiStatusText">AI off</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="panel how-it-works">
+      <div class="panel-head">
+        <h2>📲 How it works</h2>
+      </div>
+      <div class="setup-body">
+        <p>VyaparTrack runs <b>100% offline on your phone</b> — no Node.js, no embedded server, nothing to crash.</p>
+        <ol>
+          <li>Customer sends you an order on WhatsApp (or you type one below).</li>
+          <li>Tap <b>📤 Share</b> on a saved order, or paste/type the order text above.</li>
+          <li>The <b>Poolside AI parser</b> extracts customer / item / qty / cost / profit / total automatically.</li>
+          <li>Hit <b>📤 Share on WhatsApp</b> on any order to send a clean confirmation back to the customer.</li>
+        </ol>
+        <p class="muted small">Auto-tracking of incoming WhatsApp messages requires a server backend (the WhatsApp Cloud API or Baileys + Node.js). This app uses the simplest working setup: parse locally + share back.</p>
+      </div>
+    </section>
+
+    <section class="stats-grid">
+      <div class="stat-card">
+        <span class="stat-label">Total Orders</span>
+        <span class="stat-value" id="statOrders">0</span>
+        <span class="stat-sub">tracked locally</span>
+      </div>
+      <div class="stat-card accent-green">
+        <span class="stat-label">Revenue</span>
+        <span class="stat-value" id="statRevenue">₹0</span>
+        <span class="stat-sub">total billed</span>
+      </div>
+      <div class="stat-card accent-gold">
+        <span class="stat-label">Profit</span>
+        <span class="stat-value" id="statProfit">₹0</span>
+        <span class="stat-sub" id="statMargin">0% avg margin</span>
+      </div>
+      <div class="stat-card accent-violet">
+        <span class="stat-label">Cost Spent</span>
+        <span class="stat-value" id="statCost">₹0</span>
+        <span class="stat-sub">money invested</span>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>➕ Add / Parse Order</h2>
+        <span class="hint" id="parserHint">Paste a WhatsApp message — AI extracts the order</span>
+      </div>
+      <form id="orderForm" class="order-form">
+        <input id="orderText" type="text" autocomplete="off"
+          placeholder='e.g. Order from Mayank, 500 grams ladoo, +15% profit, total cost of ladoo = 200 rupees' />
+        <button type="submit">Track Order</button>
+      </form>
+      <div id="formResult" class="form-result hidden"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>🧾 Orders</h2>
+        <div class="panel-actions">
+          <button id="demoBtn" class="btn-ghost">Load demo data</button>
+          <button id="refreshBtn" class="btn-ghost">Refresh</button>
+          <button id="clearBtn" class="btn-ghost danger">Clear all</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Customer</th>
+              <th>Item</th>
+              <th>Qty</th>
+              <th>Cost</th>
+              <th>Profit %</th>
+              <th>Profit</th>
+              <th>Total</th>
+              <th>Source</th>
+              <th>Time</th>
+              <th>Share</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="ordersBody">
+            <tr><td colspan="11" class="empty">No orders yet. Type one above or tap "Load demo data".</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer>VyaparTrack · local-only · AI parsing by Poolside · v2.1</footer>
+
+  <!-- ============ Settings modal ============ -->
+  <div id="settingsModal" class="modal hidden">
+    <div class="modal-card">
+      <h2>⚙ Connect to server</h2>
+      <p class="muted small">VyaparTrack uses a small cloud server that runs WhatsApp + Poolside AI. The app's APK ships with a default server URL — just paste the API token from your server deploy to activate it.</p>
+      <label>Server URL</label>
+      <input id="serverUrlInput" type="text" autocomplete="off" placeholder="https://vyapartrack.onrender.com" />
+      <label>API token</label>
+      <input id="apiTokenInput" type="password" autocomplete="off" placeholder="paste from server logs" />
+      <div id="settingsTest" class="form-result hidden"></div>
+      <div class="modal-actions">
+        <button id="settingsTestBtn" class="btn-ghost">Test connection</button>
+        <button id="settingsSaveBtn" class="btn-primary">Save</button>
+        <button id="settingsCloseBtn" class="btn-ghost">Close</button>
+      </div>
+      <p class="muted small">No server yet? The app still works in <b>offline mode</b> — type or paste an order, the local parser handles it. You can deploy the server later (see <code>DEPLOY.md</code>) and connect for real WhatsApp tracking.</p>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
