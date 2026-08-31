@@ -10,7 +10,7 @@ const API_TOKEN_KEY = 'vyapartrack.server.token';
 // Default server URL baked into the APK. User can override in Settings after deploying their own.
 // To set your own default, change this string before building.
 const DEFAULT_SERVER_URL = 'https://vyapartrack.onrender.com';
-const DEFAULT_API_TOKEN = ''; // user enters after deploy
+const DEFAULT_API_TOKEN = '44fff7e79de139a9e85b0e77c9c5017a0b84dac30978e4f6bf';
 
 let pollTimer = null;
 
