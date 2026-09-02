@@ -26,6 +26,32 @@ const store = require('./store');
 const AUTH_DIR = process.env.VYAPAR_AUTH_DIR || path.join(__dirname, '..', 'auth');
 
 let sock = null;
+// jid -> WhatsApp contact name (saved name preferred, profile name as fallback)
+const contactNames = new Map();
+function rememberContact(c) {
+  if (!c || !c.id) return;
+  const cur = contactNames.get(c.id);
+  if (c.name) contactNames.set(c.id, c.name);
+  else if (!cur && (c.notify || c.verifiedName)) contactNames.set(c.id, c.notify || c.verifiedName);
+}
+
+/** Resolve who sent the message: saved WhatsApp name -> profile name -> +number. */
+async function resolveSenderName(jid, pushName) {
+  let name = contactNames.get(jid);
+  if (!name && sock && sock.onWhatsApp) {
+    try {
+      const res = await sock.onWhatsApp(jid);
+      const hit = Array.isArray(res) ? res.find((r) => r.exists && r.name) : null;
+      if (hit) { name = hit.name; contactNames.set(jid, name); }
+    } catch { /* ignore - fall through */ }
+  }
+  if (!name && pushName) name = pushName;
+  if (!name) {
+    const digits = String(jid).split('@')[0].replace(/\D/g, '');
+    if (digits) name = '+' + digits;
+  }
+  return name || null;
+}
 let botStatus = {
   connected: false,
   connecting: false,
@@ -63,6 +89,8 @@ async function startBot(onOrderRecorded) {
   });
 
   sock.ev.on('creds.update', saveCreds);
+  sock.ev.on('contacts.upsert', (cs) => cs.forEach(rememberContact));
+  sock.ev.on('contacts.update', (cs) => cs.forEach(rememberContact));
 
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update;
@@ -119,7 +147,9 @@ async function startBot(onOrderRecorded) {
       const order = await extract(text);
       if (!order) return;
 
-      const record = store.addOrder({ ...order, source: 'whatsapp' });
+      const senderJid = msg.key.participant || msg.key.remoteJid;
+      const senderName = await resolveSenderName(senderJid, msg.pushName);
+      const record = store.addOrder({ ...order, customer: senderName || order.customer, source: 'whatsapp' });
       console.log(`[bot] Order tracked: ${record.customer} | ${record.quantity ?? ''}${record.unit ?? ''} ${record.item} | cost ${record.costPrice ?? '-'} | profit ${record.profitAmount ?? '-'} (${record.profitPercent ?? '-'}%) | total ${record.totalAmount ?? '-'}`);
       if (onOrderRecorded) onOrderRecorded(record);
 

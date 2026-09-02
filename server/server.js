@@ -226,6 +226,33 @@ async function parseOrder(text) {
 
 // ============ WhatsApp bot ============
 let sock = null;
+
+// jid -> WhatsApp contact name (saved name preferred, profile name as fallback)
+const contactNames = new Map();
+function rememberContact(c) {
+  if (!c || !c.id) return;
+  const cur = contactNames.get(c.id);
+  if (c.name) contactNames.set(c.id, c.name);
+  else if (!cur && (c.notify || c.verifiedName)) contactNames.set(c.id, c.notify || c.verifiedName);
+}
+
+/** Resolve who sent the message: saved WhatsApp name -> profile name -> +number. */
+async function resolveSenderName(jid, pushName) {
+  let name = contactNames.get(jid);
+  if (!name && sock && sock.onWhatsApp) {
+    try {
+      const res = await sock.onWhatsApp(jid);
+      const hit = Array.isArray(res) ? res.find((r) => r.exists && r.name) : null;
+      if (hit) { name = hit.name; contactNames.set(jid, name); }
+    } catch { /* ignore - fall through */ }
+  }
+  if (!name && pushName) name = pushName;
+  if (!name) {
+    const digits = String(jid).split('@')[0].replace(/\D/g, '');
+    if (digits) name = '+' + digits;
+  }
+  return name || null;
+}
 let botStatus = {
   connected: false,
   connecting: false,
@@ -250,6 +277,8 @@ async function startBot() {
   });
 
   sock.ev.on('creds.update', saveCreds);
+  sock.ev.on('contacts.upsert', (cs) => cs.forEach(rememberContact));
+  sock.ev.on('contacts.update', (cs) => cs.forEach(rememberContact));
 
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update;
@@ -286,6 +315,8 @@ async function startBot() {
       if (type !== 'notify') return;
       const msg = messages[0];
       if (!msg.message || msg.key.fromMe || msg.key.remoteJid === 'status@broadcast') return;
+      const senderJid = msg.key.participant || msg.key.remoteJid; // handles groups too
+      const senderName = await resolveSenderName(senderJid, msg.pushName);
       const text = msg.message.conversation
         || msg.message.extendedTextMessage?.text
         || msg.message.imageMessage?.caption
@@ -295,7 +326,7 @@ async function startBot() {
       const order = await parseOrder(text);
       if (!order) return;
 
-      const rec = addOrder({ ...order, source: 'whatsapp' });
+      const rec = addOrder({ ...order, customer: senderName || order.customer, source: 'whatsapp' });
       console.log(`[bot] Order: ${rec.customer} | ${rec.quantity ?? ''}${rec.unit ?? ''} ${rec.item} | total ${rec.totalAmount ?? '-'}`);
 
       if (process.env.AUTO_REPLY !== 'false') {
