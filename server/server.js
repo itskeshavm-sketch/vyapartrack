@@ -87,6 +87,7 @@ Extract a JSON object from the message with EXACTLY these fields:
 {"customer": string|null, "item": string|null, "quantity": number|null, "unit": "kg"|"g"|"pcs"|"dozen"|"l"|null, "costPrice": number|null, "profitPercent": number|null, "profitAmount": number|null, "totalAmount": number|null}
 Rules:
 - costPrice = what the shopkeeper paid (cost / CP / base price).
+- A message can be a valid order with only customer/item/quantity (price discussed later) - extract what is present, leave the rest null.
 - If profit is given as a percent of cost, compute profitAmount = costPrice * pct / 100.
 - If profit is given as an amount, compute profitPercent = profitAmount / costPrice * 100 (round to 2 decimals).
 - totalAmount = costPrice + profitAmount when not stated.
@@ -152,7 +153,7 @@ const PROFIT_PCT_RE = /\+?\s*(\d+(?:\.\d+)?)\s*%/;
 const PROFIT_PCT_WORD_RE = /(?:profit|margin)\s*(?:is|=|:|of|@)?\s*(\d+(?:\.\d+)?)\s*%/i;
 const PROFIT_AMT_RE = /(?:profit|margin)\s*(?:is|=|:|of)?\s*(?:rs\.?|rupees|inr|₹)?\s*(\d+(?:\.\d+)?)\b(?!\s*%)/i;
 const TOTAL_RE = /total\s*(?:amount|price|sell(?:ing)?)?\s*(?:[=:]|is)?\s*(?:rs\.?|rupees|inr|₹)?\s*(\d+(?:\.\d+)?)/i;
-const ORDER_INTENT_RE = /\b(order|ordered|sold|sale|sell|order aaya|bill|invoice|mangwaya|mange|mangaye|chahiye)\b/i;
+const ORDER_INTENT_RE = /\b(order|ordered|sold|sale|sell|bill|invoice|mangwaya|mange|mangaye|chahiye|bhejo|bhejna|bhej|karo|krdo|kitna|kitne|mujhe)\b|(?:can|may)\s+i\s+(?:get|have|order)|i\s+(?:want|need)\b/i;
 const CUSTOMER_RES = [
   /order\s*from\s+([A-Za-z][A-Za-z .]{1,30}?)(?=\s*[,.!]|$|\s+\d|\s+cost|\s+price|\s+profit|\s+\+)/i,
   /(?:customer|client)\s*[:\-]\s*([A-Za-z][A-Za-z .]{1,30}?)(?=\s*[,.!]|$|\s+\d|\s+cost|\s+price|\s+profit)/i,
@@ -206,7 +207,7 @@ function parseWithRegex(text) {
   const pa = text.match(PROFIT_AMT_RE); if (pa) profitAmount = toNum(pa[1]);
   const sm = text.match(SOLD_FOR_RE); if (sm) totalAmount = toNum(sm[1]);
   const tm = text.match(TOTAL_RE); if (tm) totalAmount = toNum(tm[1]);
-  if (costPrice == null && totalAmount == null) return null;
+  if (costPrice == null && totalAmount == null && quantity == null) return null;
   if (costPrice != null && profitPercent != null && profitAmount == null) profitAmount = round2((costPrice * profitPercent) / 100);
   if (costPrice != null && totalAmount == null && profitAmount != null) totalAmount = round2(costPrice + profitAmount);
   if (totalAmount != null && costPrice != null && profitAmount == null) profitAmount = round2(totalAmount - costPrice);
@@ -218,7 +219,7 @@ function parseWithRegex(text) {
 async function parseOrder(text) {
   if (POOLSIDE_API_KEY) {
     const ai = await parseWithAI(text);
-    if (ai && (ai.costPrice != null || ai.totalAmount != null)) return ai;
+    if (ai && (ai.costPrice != null || ai.totalAmount != null || ai.quantity != null)) return ai;
   }
   return parseWithRegex(text);
 }
@@ -326,6 +327,16 @@ async function requestPairingCode(phoneRaw) {
 // ============ Express API ============
 const app = express();
 app.use(express.json());
+
+// The Android app loads its dashboard from file:// (Origin: null) and the
+// browser blocks cross-origin fetches without these headers.
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-API-Token');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,DELETE,OPTIONS');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
 
 function auth(req, res, next) {
   const tok = req.headers['x-api-token'];

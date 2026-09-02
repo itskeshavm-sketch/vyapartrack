@@ -12,6 +12,7 @@ Extract a JSON object from the message with EXACTLY these fields:
 {"customer": string|null, "item": string|null, "quantity": number|null, "unit": "kg"|"g"|"pcs"|"dozen"|"l"|null, "costPrice": number|null, "profitPercent": number|null, "profitAmount": number|null, "totalAmount": number|null}
 Rules:
 - costPrice = what the shopkeeper paid (cost / CP / base price).
+- A message can be a valid order with only customer/item/quantity (price discussed later) - extract what is present, leave the rest null.
 - If profit is given as a percent of cost, compute profitAmount = costPrice * pct / 100.
 - If profit is given as an amount, compute profitPercent = profitAmount / costPrice * 100 (round to 2 decimals).
 - totalAmount = costPrice + profitAmount when not stated.

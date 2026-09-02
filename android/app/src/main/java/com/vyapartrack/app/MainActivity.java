@@ -15,9 +15,20 @@ import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import android.widget.Toast;
 
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
 public class MainActivity extends Activity {
 
     private WebView webView;
+    private final ExecutorService httpExecutor = Executors.newSingleThreadExecutor();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -36,6 +47,10 @@ public class MainActivity extends Activity {
         s.setDomStorageEnabled(true);          // localStorage persistence
         s.setDatabaseEnabled(true);
         s.setAllowFileAccess(true);
+        // The dashboard runs from file:// but must call the https API.
+        // Without these, every fetch() throws "TypeError: Failed to fetch".
+        s.setAllowFileAccessFromFileURLs(true);
+        s.setAllowUniversalAccessFromFileURLs(true);
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setUseWideViewPort(true);
         s.setLoadWithOverviewMode(true);
@@ -114,6 +129,73 @@ public class MainActivity extends Activity {
             } catch (Exception e) {
                 return "unknown";
             }
+        }
+
+        @JavascriptInterface
+        public void openWhatsApp() {
+            try {
+                Intent launch = getPackageManager().getLaunchIntentForPackage("com.whatsapp");
+                if (launch != null) startActivity(launch);
+                else runOnUiThread(() -> Toast.makeText(MainActivity.this,
+                        "WhatsApp not installed", Toast.LENGTH_SHORT).show());
+            } catch (Exception e) {
+                runOnUiThread(() -> Toast.makeText(MainActivity.this,
+                        "Could not open WhatsApp", Toast.LENGTH_SHORT).show());
+            }
+        }
+
+        /**
+         * Native HTTP for the dashboard. Newer WebViews block fetch() from
+         * file:// origins (CORS), so all server calls go through here.
+         * Returns JSON: {"status":200,"body":"..."} or {"status":0,"error":"..."}.
+         */
+        @JavascriptInterface
+        public void http(String method, String urlStr, String body, String headersJson, String callback) {
+            httpExecutor.execute(() -> {
+                String result;
+                try {
+                    HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
+                    conn.setRequestMethod(method);
+                    conn.setConnectTimeout(25000);
+                    conn.setReadTimeout(25000);
+                    if (headersJson != null && headersJson.length() > 0) {
+                        org.json.JSONObject headers = new org.json.JSONObject(headersJson);
+                        java.util.Iterator<String> keys = headers.keys();
+                        while (keys.hasNext()) {
+                            String key = keys.next();
+                            conn.setRequestProperty(key, headers.getString(key));
+                        }
+                    }
+                    if (body != null && body.length() > 0) {
+                        conn.setDoOutput(true);
+                        conn.setRequestProperty("Content-Type", "application/json");
+                        byte[] out = body.getBytes(StandardCharsets.UTF_8);
+                        conn.setFixedLengthStreamingMode(out.length);
+                        try (OutputStream os = conn.getOutputStream()) {
+                            os.write(out);
+                        }
+                    }
+                    int status = conn.getResponseCode();
+                    InputStream in = status >= 400 ? conn.getErrorStream() : conn.getInputStream();
+                    StringBuilder sb = new StringBuilder();
+                    if (in != null) {
+                        try (BufferedReader reader = new BufferedReader(
+                                new InputStreamReader(in, StandardCharsets.UTF_8))) {
+                            String line;
+                            while ((line = reader.readLine()) != null) {
+                                sb.append(line).append('\n');
+                            }
+                        }
+                    }
+                    result = "{\"status\":" + status + ",\"body\":"
+                            + org.json.JSONObject.quote(sb.toString()) + "}";
+                } catch (Exception e) {
+                    result = "{\"status\":0,\"error\":"
+                            + org.json.JSONObject.quote(String.valueOf(e.getMessage())) + "}";
+                }
+                    final String js = "__vyaparHttpResult('" + callback + "'," + result + ")";
+                    runOnUiThread(() -> webView.evaluateJavascript(js, null));
+            });
         }
     }
 }

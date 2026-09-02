@@ -10,8 +10,8 @@ async function extract(messageText) {
   if (process.env.USE_AI_PARSER !== 'false' && isConfigured()) {
     order = await extractOrder(messageText);
     if (order) {
-      // Sanity check: an AI result still needs a cost or a total
-      if (order.costPrice == null && order.totalAmount == null) order = null;
+      // Sanity check: an AI result needs a cost, a total, or a quantity
+      if (order.costPrice == null && order.totalAmount == null && order.quantity == null) order = null;
     }
   }
 

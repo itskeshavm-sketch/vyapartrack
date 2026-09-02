@@ -2,136 +2,118 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>VyaparTrack · Order Tracker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b3d2e" />
+  <title>VyaparTrack</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="bg-glow"></div>
-
-  <header class="topbar">
-    <div class="brand">
-      <div class="brand-icon">₹</div>
-      <div>
-        <h1>VyaparTrack</h1>
-        <p>AI-powered order tracker · data stays on your phone</p>
-      </div>
+  <!-- ================== ONBOARDING (Connect WhatsApp) ================== -->
+  <div id="onboarding" class="onboarding hidden">
+    <div class="ob-header">
+      <div class="ob-logo">₹</div>
+      <h1>VyaparTrack</h1>
+      <p>Track every order that lands on your WhatsApp, automatically.</p>
     </div>
-    <div class="top-actions">
-      <button id="settingsBtn" class="btn-ghost" title="Poolside API key &amp; setup">⚙ Settings</button>
-      <div id="aiStatus" class="status-pill ai">
-        <span class="dot"></span><span id="aiStatusText">AI off</span>
+
+    <div class="ob-step" id="ob-step-1">
+      <h2>1. Enter your number</h2>
+      <p class="muted">We'll generate a one-time code to link your WhatsApp.</p>
+      <div class="input-row">
+        <span class="cc">+91</span>
+        <input id="obPhone" type="tel" inputmode="numeric" maxlength="10"
+               placeholder="98765 43210" autocomplete="off" />
       </div>
+      <button id="obGetCodeBtn" class="btn-primary big">Get pairing code →</button>
+      <p class="muted small ob-error" id="obError"></p>
     </div>
-  </header>
 
-  <main>
-    <section class="panel how-it-works">
-      <div class="panel-head">
-        <h2>📲 How it works</h2>
-      </div>
-      <div class="setup-body">
-        <p>VyaparTrack runs <b>100% offline on your phone</b> — no Node.js, no embedded server, nothing to crash.</p>
-        <ol>
-          <li>Customer sends you an order on WhatsApp (or you type one below).</li>
-          <li>Tap <b>📤 Share</b> on a saved order, or paste/type the order text above.</li>
-          <li>The <b>Poolside AI parser</b> extracts customer / item / qty / cost / profit / total automatically.</li>
-          <li>Hit <b>📤 Share on WhatsApp</b> on any order to send a clean confirmation back to the customer.</li>
-        </ol>
-        <p class="muted small">Auto-tracking of incoming WhatsApp messages requires a server backend (the WhatsApp Cloud API or Baileys + Node.js). This app uses the simplest working setup: parse locally + share back.</p>
-      </div>
-    </section>
+    <div class="ob-step hidden" id="ob-step-2">
+      <h2>2. Open WhatsApp on your phone</h2>
+      <p class="muted">Then go to:</p>
+      <ol class="ob-steps">
+        <li><b>Settings</b> ⚙️</li>
+        <li><b>Linked devices</b></li>
+        <li><b>Link a device</b></li>
+        <li>Tap <b>"Link with phone number instead"</b></li>
+      </ol>
 
-    <section class="stats-grid">
-      <div class="stat-card">
-        <span class="stat-label">Total Orders</span>
-        <span class="stat-value" id="statOrders">0</span>
-        <span class="stat-sub">tracked locally</span>
+      <h2>3. Enter this code</h2>
+      <div class="code-card" id="obCodeBox">
+        <div class="pair-code" id="obCode">···· ····</div>
+        <button id="obCopyBtn" class="btn-ghost">Copy</button>
       </div>
-      <div class="stat-card accent-green">
-        <span class="stat-label">Revenue</span>
-        <span class="stat-value" id="statRevenue">₹0</span>
-        <span class="stat-sub">total billed</span>
-      </div>
-      <div class="stat-card accent-gold">
-        <span class="stat-label">Profit</span>
-        <span class="stat-value" id="statProfit">₹0</span>
-        <span class="stat-sub" id="statMargin">0% avg margin</span>
-      </div>
-      <div class="stat-card accent-violet">
-        <span class="stat-label">Cost Spent</span>
-        <span class="stat-value" id="statCost">₹0</span>
-        <span class="stat-sub">money invested</span>
-      </div>
-    </section>
+      <p class="muted small" id="obStatus">Waiting for WhatsApp to connect…</p>
+      <button id="obOpenWABtn" class="btn-ghost">Open WhatsApp</button>
+    </div>
+  </div>
 
-    <section class="panel">
-      <div class="panel-head">
-        <h2>➕ Add / Parse Order</h2>
-        <span class="hint" id="parserHint">Paste a WhatsApp message — AI extracts the order</span>
-      </div>
-      <form id="orderForm" class="order-form">
-        <input id="orderText" type="text" autocomplete="off"
-          placeholder='e.g. Order from Mayank, 500 grams ladoo, +15% profit, total cost of ladoo = 200 rupees' />
-        <button type="submit">Track Order</button>
-      </form>
-      <div id="formResult" class="form-result hidden"></div>
-    </section>
-
-    <section class="panel">
-      <div class="panel-head">
-        <h2>🧾 Orders</h2>
-        <div class="panel-actions">
-          <button id="demoBtn" class="btn-ghost">Load demo data</button>
-          <button id="refreshBtn" class="btn-ghost">Refresh</button>
-          <button id="clearBtn" class="btn-ghost danger">Clear all</button>
+  <!-- ================== MAIN DASHBOARD ================== -->
+  <div id="dashboard" class="dashboard hidden">
+    <header class="dash-header">
+      <div class="brand">
+        <div class="brand-icon">₹</div>
+        <div>
+          <h1>VyaparTrack</h1>
+          <p id="connStatus">Connecting…</p>
         </div>
       </div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Customer</th>
-              <th>Item</th>
-              <th>Qty</th>
-              <th>Cost</th>
-              <th>Profit %</th>
-              <th>Profit</th>
-              <th>Total</th>
-              <th>Source</th>
-              <th>Time</th>
-              <th>Share</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="ordersBody">
-            <tr><td colspan="11" class="empty">No orders yet. Type one above or tap "Load demo data".</td></tr>
-          </tbody>
-        </table>
+      <button id="settingsBtn" class="icon-btn" title="Settings">⚙</button>
+    </header>
+
+    <section class="stats">
+      <div class="stat"><span class="lbl">Orders</span><span class="val" id="statOrders">0</span></div>
+      <div class="stat green"><span class="lbl">Revenue</span><span class="val" id="statRevenue">₹0</span></div>
+      <div class="stat gold"><span class="lbl">Profit</span><span class="val" id="statProfit">₹0</span></div>
+      <div class="stat violet"><span class="lbl">Cost</span><span class="val" id="statCost">₹0</span></div>
+    </section>
+
+    <section class="card add-card">
+      <h2>Add order</h2>
+      <p class="muted small">Paste a WhatsApp message — AI extracts it.</p>
+      <form id="orderForm">
+        <input id="orderText" type="text" placeholder='e.g. Order from Mayank, 500g ladoo, +15% profit, cost 200' />
+        <button type="submit" class="btn-primary">Track</button>
+      </form>
+      <div id="formResult" class="result hidden"></div>
+    </section>
+
+    <section class="card orders-card">
+      <div class="card-head">
+        <h2>Orders</h2>
+        <div class="row-actions">
+          <button id="demoBtn" class="btn-ghost small">Demo</button>
+          <button id="refreshBtn" class="btn-ghost small">↻</button>
+        </div>
+      </div>
+      <div id="ordersList" class="orders-list">
+        <div class="empty">No orders yet. They'll appear here as customers message you on WhatsApp.</div>
       </div>
     </section>
-  </main>
 
-  <footer>VyaparTrack · local-only · AI parsing by Poolside · v2.1</footer>
+    <footer>v2.5.5 · native HTTP bridge · local cache + server sync</footer>
+  </div>
 
-  <!-- ============ Settings modal ============ -->
+  <!-- ================== SETTINGS MODAL ================== -->
   <div id="settingsModal" class="modal hidden">
     <div class="modal-card">
-      <h2>⚙ Connect to server</h2>
-      <p class="muted small">VyaparTrack uses a small cloud server that runs WhatsApp + Poolside AI. The app's APK ships with a default server URL — just paste the API token from your server deploy to activate it.</p>
-      <label>Server URL</label>
-      <input id="serverUrlInput" type="text" autocomplete="off" placeholder="https://vyapartrack.onrender.com" />
-      <label>API token</label>
-      <input id="apiTokenInput" type="password" autocomplete="off" placeholder="paste from server logs" />
-      <div id="settingsTest" class="form-result hidden"></div>
-      <div class="modal-actions">
-        <button id="settingsTestBtn" class="btn-ghost">Test connection</button>
-        <button id="settingsSaveBtn" class="btn-primary">Save</button>
-        <button id="settingsCloseBtn" class="btn-ghost">Close</button>
+      <div class="card-head">
+        <h2>Settings</h2>
+        <button class="icon-btn" id="settingsCloseBtn">✕</button>
       </div>
-      <p class="muted small">No server yet? The app still works in <b>offline mode</b> — type or paste an order, the local parser handles it. You can deploy the server later (see <code>DEPLOY.md</code>) and connect for real WhatsApp tracking.</p>
+      <label>Server URL</label>
+      <input id="serverUrlInput" type="text" />
+      <label>API token</label>
+      <input id="apiTokenInput" type="password" />
+      <div id="settingsTest" class="result hidden"></div>
+      <div class="modal-actions">
+        <button id="settingsTestBtn" class="btn-ghost">Test</button>
+        <button id="settingsDiagnoseBtn" class="btn-ghost">Diagnose</button>
+        <button id="settingsSaveBtn" class="btn-primary">Save</button>
+      </div>
+      <p class="muted small">Defaults are baked in. You usually don't need to change these.</p>
     </div>
   </div>
 

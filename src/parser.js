@@ -17,7 +17,7 @@ const PROFIT_PCT_RE = /\+?\s*(\d+(?:\.\d+)?)\s*%/;
 const PROFIT_PCT_WORD_RE = /(?:profit|margin)\s*(?:is|=|:|of|@)?\s*(\d+(?:\.\d+)?)\s*%/i;
 const PROFIT_AMT_RE = /(?:profit|margin)\s*(?:is|=|:|of)?\s*(?:rs\.?|rupees|inr|\u20B9)?\s*(\d+(?:\.\d+)?)\b(?!\s*%)/i;
 const TOTAL_RE = /total\s*(?:amount|price|sell(?:ing)?)?\s*(?:[=:]|is)?\s*(?:rs\.?|rupees|inr|\u20B9)?\s*(\d+(?:\.\d+)?)/i;
-const ORDER_INTENT_RE = /\b(order|ordered|sold|sale|sell|order aaya|bill|invoice|mangwaya|mangwaya|mange|mangaye|chahiye)\b/i;
+const ORDER_INTENT_RE = /\b(order|ordered|sold|sale|sell|bill|invoice|mangwaya|mange|mangaye|chahiye|bhejo|bhejna|bhej|karo|krdo|kitna|kitne|mujhe)\b|(?:can|may)\s+i\s+(?:get|have|order)|i\s+(?:want|need)\b/i;
 
 // Customer name: tried in priority order, first match wins
 const CUSTOMER_RES = [
@@ -119,8 +119,9 @@ function parseOrder(text) {
   const totalMatch = text.match(TOTAL_RE);
   if (totalMatch) totalAmount = toNum(totalMatch[1]);
 
-  // Need at least a cost or a total to be a real order record
-  if (costPrice == null && totalAmount == null) return null;
+  // Need a cost, a total, or a quantity to be a real order record.
+  // Price-less inquiries like "can i get 500 grams laddu" are orders too.
+  if (costPrice == null && totalAmount == null && quantity == null) return null;
 
   // Derive missing values
   if (costPrice != null && profitPercent != null && profitAmount == null) {
