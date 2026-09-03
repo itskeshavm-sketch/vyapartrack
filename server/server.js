@@ -376,31 +376,21 @@ async function parseOrder(text) {
 // ============ WhatsApp bot ============
 let sock = null;
 
-// jid -> WhatsApp contact name (saved name preferred, profile name as fallback)
+// jid -> saved WhatsApp contact name (from the user's address book).
+// Profile names (pushName) are kept separately and never override saved names.
 const contactNames = new Map();
 function rememberContact(c) {
   if (!c || !c.id) return;
-  const cur = contactNames.get(c.id);
-  if (c.name) contactNames.set(c.id, c.name);
-  else if (!cur && (c.notify || c.verifiedName)) contactNames.set(c.id, c.notify || c.verifiedName);
+  if (c.name) contactNames.set(c.id, c.name); // saved address-book name (highest priority)
 }
 
-/** Resolve who sent the message: saved WhatsApp name -> profile name -> +number. */
+/** Resolve who sent the message: saved contact name -> profile name (pushName) -> +number. */
 async function resolveSenderName(jid, pushName) {
-  let name = contactNames.get(jid);
-  if (!name && sock && sock.onWhatsApp) {
-    try {
-      const res = await sock.onWhatsApp(jid);
-      const hit = Array.isArray(res) ? res.find((r) => r.exists && r.name) : null;
-      if (hit) { name = hit.name; contactNames.set(jid, name); }
-    } catch { /* ignore - fall through */ }
-  }
-  if (!name && pushName) name = pushName;
-  if (!name) {
-    const digits = String(jid).split('@')[0].replace(/\D/g, '');
-    if (digits) name = '+' + digits;
-  }
-  return name || null;
+  const saved = contactNames.get(jid);
+  if (saved) return saved;
+  if (pushName) return pushName;
+  const digits = String(jid).split('@')[0].replace(/\D/g, '');
+  return digits ? '+' + digits : jid;
 }
 let botStatus = {
   connected: false,
@@ -426,6 +416,12 @@ async function startBot() {
   });
 
   sock.ev.on('creds.update', saveCreds);
+  // Saved contact names arrive here on first connect (full address book sync)
+  sock.ev.on('messaging-history.set', ({ contacts = [], chats = [] } = {}) => {
+    contacts.forEach(rememberContact);
+    chats.forEach((ch) => { if (ch.name && ch.id) contactNames.set(ch.id, ch.name); });
+  });
+  // New/renamed contacts saved while connected
   sock.ev.on('contacts.upsert', (cs) => cs.forEach(rememberContact));
   sock.ev.on('contacts.update', (cs) => cs.forEach(rememberContact));
 
