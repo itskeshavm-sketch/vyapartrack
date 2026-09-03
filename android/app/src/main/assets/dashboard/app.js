@@ -136,7 +136,7 @@ $('obOpenWABtn').addEventListener('click', () => {
 function renderOrders(orders) {
   const list = $('ordersList');
   if (!orders.length) {
-    list.innerHTML = '<div class="empty">No orders yet. They\'ll appear here as customers message you on WhatsApp.</div>';
+    list.innerHTML = '<div class="empty">अभी कोई ऑर्डर नहीं। ग्राहक WhatsApp पर मैसेज करें तो यहाँ दिखेगा।</div>';
     return;
   }
   list.innerHTML = orders.map((o) => {
@@ -148,16 +148,16 @@ function renderOrders(orders) {
           <div class="order-item">${escapeHtml(qty + ' ' + (o.item || '—'))}</div>
           <div class="order-src">${sourceLabel(o.source)}</div>
         </div>
-        <div class="order-amt">${money(o.totalAmount)}</div>
+        <div class="order-amt">${o.totalAmount != null ? money(o.totalAmount) : '⏳'}</div>
         <div class="order-actions">
-          <button class="icon-btn" data-act="share" data-id="${o.id}" title="Share on WhatsApp">📤</button>
-          <button class="icon-btn" data-act="del" data-id="${o.id}" title="Delete">✕</button>
+          <button class="icon-btn" data-act="share" data-id="${o.id}" title="WhatsApp पर भेजें">📤</button>
+          <button class="icon-btn" data-act="del" data-id="${o.id}" title="हटाएं">✕</button>
         </div>
       </div>`;
   }).join('');
 }
 function sourceLabel(s) {
-  return ({ whatsapp: '📱 WhatsApp', manual: '✍ Manual', ai: '🤖 AI', regex: '🧮 regex', demo: '🎁 demo' })[s] || s || '—';
+  return ({ whatsapp: '📱 WhatsApp', manual: '✍ खुद डाला', ai: '🤖 AI', regex: '🧮 parser', demo: '🎁 डेमो' })[s] || s || '—';
 }
 function renderStats(orders) {
   let revenue = 0, cost = 0, profit = 0;
@@ -191,21 +191,21 @@ async function pollOnce() {
     serverOk = true;
     botConnected = status.connected;
     if (status.connected) {
-      setConnStatus('WhatsApp connected ✓', true);
-      // Pairing completed while user sat on the onboarding screen -> switch.
+      setConnStatus('WhatsApp जुड़ा ✓', true);
       if (!$('onboarding').classList.contains('hidden')) showDashboard();
     }
-    else if (status.connecting) setConnStatus('WhatsApp connecting…', false);
+    else if (status.connecting) setConnStatus('WhatsApp जुड़ रहा है…', false);
     else if (status.lastError) setConnStatus(status.lastError, false);
-    else setConnStatus('Server connected · not yet paired', true);
+    else setConnStatus('सर्वर जुड़ा · WhatsApp बाकी', true);
     saveLocalOrders(orders);
     renderAll();
+    refreshPending(); // async, fire and forget
   } catch (err) {
     serverOk = false;
     const msg = err.message || 'unknown error';
-    if (/unauthorized|401/i.test(msg)) setConnStatus('⚠ Wrong API token — tap ⚙ Settings', false);
-    else if (/timed?\s*out|timeout/i.test(msg)) setConnStatus('Server waking — retrying…', false);
-    else setConnStatus('Server offline (' + msg + ')', false);
+    if (/unauthorized|401/i.test(msg)) setConnStatus('⚠ गलत API token — ⚙ खोलें', false);
+    else if (/timed?\s*out|timeout/i.test(msg)) setConnStatus('सर्वर जग रहा है…', false);
+    else setConnStatus('सर्वर बंद (' + msg + ')', false);
   }
 }
 function startPolling() {
@@ -231,14 +231,14 @@ $('orderForm').addEventListener('submit', async (e) => {
       });
     } else {
       order = localParse(text);
-      if (!order) throw new Error('Server is offline and the local parser couldn\'t read this. Try again when connected.');
+      if (!order) throw new Error('सर्वर बंद है और लोकल parser यह पढ़ नहीं सका। सर्वर जुड़ने के बाद कोशिश करें।');
     }
     const orders = loadLocalOrders();
     orders.unshift(order);
     saveLocalOrders(orders);
     renderAll();
     result.className = 'result ok';
-    result.innerHTML = `✓ <b>${escapeHtml(order.customer)}</b> — ${order.quantity ?? '—'}${order.unit ? ' ' + order.unit : ''} ${escapeHtml(order.item)} · Total <b style="color:#f5b642">${money(order.totalAmount)}</b>`;
+    result.innerHTML = `✓ <b>${escapeHtml(order.customer)}</b> — ${order.quantity ?? '—'}${order.unit ? ' ' + order.unit : ''} ${escapeHtml(order.item)} · कुल <b style="color:#f5c66b">${money(order.totalAmount)}</b>`;
     $('orderText').value = '';
   } catch (err) {
     result.className = 'result err';
@@ -277,6 +277,99 @@ $('ordersList').addEventListener('click', async (e) => {
   }
 });
 
+// ============ Catalog (मेरे आइटम) ============
+function openCatalog() { renderCatalog(); $('catalogModal').classList.remove('hidden'); }
+function closeCatalog() { $('catalogModal').classList.add('hidden'); }
+$('catalogBtn').addEventListener('click', openCatalog);
+$('catalogCloseBtn').addEventListener('click', closeCatalog);
+
+async function renderCatalog() {
+  const list = $('catalogList');
+  list.innerHTML = '<div class="empty">लोड हो रहा है…</div>';
+  let items = [];
+  try { items = await serverFetch('/api/catalog'); }
+  catch { list.innerHTML = '<div class="empty">सर्वर से नहीं मिला।</div>'; return; }
+  if (!items.length) {
+    list.innerHTML = '<div class="empty">अभी कोई आइटम नहीं। नीचे से जोड़ें।</div>';
+    return;
+  }
+  const unitHi = { kg: 'किलो', g: 'ग्राम', l: 'लीटर', pcs: 'पीस', dozen: 'दर्जन' };
+  list.innerHTML = items.map((it) => `
+    <div class="catalog-row">
+      <div class="c-info">
+        <div class="c-name">${escapeHtml(it.name)} <span class="muted small">(${unitHi[it.unit] || it.unit || '—'})</span></div>
+        <div class="c-prices">बिक्री ₹${it.sellPrice ?? '—'} · खर्चा ₹${it.costPrice ?? '—'} → मुनाफ़ा ₹${(it.sellPrice != null && it.costPrice != null) ? fmt.format(round2(it.sellPrice - it.costPrice)) : '—'}</div>
+      </div>
+      <button class="c-del" data-id="${it.id}" title="हटाएं">✕</button>
+    </div>`).join('');
+}
+$('catalogList').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.c-del');
+  if (!btn) return;
+  try { await serverFetch('/api/catalog/' + btn.dataset.id, { method: 'DELETE' }); } catch {}
+  renderCatalog();
+});
+$('catalogForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = $('catalogName').value.trim();
+  const unit = $('catalogUnit').value;
+  const sellPrice = parseFloat($('catalogSell').value);
+  const costPrice = $('catalogCost').value ? parseFloat($('catalogCost').value) : null;
+  if (!name || !Number.isFinite(sellPrice)) return;
+  try {
+    await serverFetch('/api/catalog', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, unit, sellPrice, costPrice }),
+    });
+    $('catalogName').value = ''; $('catalogSell').value = ''; $('catalogCost').value = '';
+    renderCatalog();
+    refreshPending();
+  } catch (err) { alert('⚠ ' + err.message); }
+});
+
+// ============ Pending pricing (कीमत बतानी है) ============
+let pendingRefreshTimer = null;
+async function refreshPending() {
+  if (!serverOk) return;
+  let items = [];
+  try { items = await serverFetch('/api/pending-pricing'); } catch { return; }
+  const card = $('pendingCard');
+  if (!items.length) { card.classList.add('hidden'); return; }
+  card.classList.remove('hidden');
+  $('pendingCount').textContent = items.length + ' आइटम';
+  const unitHi = { kg: 'किलो', g: 'ग्राम', l: 'लीटर', pcs: 'पीस', dozen: 'दर्जन' };
+  $('pendingList').innerHTML = items.map((p) => `
+    <div class="pending-item" data-id="${p.id}">
+      <div class="pi-info">
+        <div class="pi-name">${escapeHtml(p.item)}</div>
+        <div class="pi-sub">${p.unit ? unitHi[p.unit] || p.unit : 'यूनिट'} प्रति · ${p.examples.length} ऑर्डर रुके हैं</div>
+      </div>
+      <input class="pi-sell" type="number" inputmode="decimal" min="0" placeholder="बिक्री ₹" />
+      <input class="pi-cost" type="number" inputmode="decimal" min="0" placeholder="खर्चा ₹" />
+      <button class="pi-save">सेव</button>
+    </div>`).join('');
+}
+$('pendingList').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.pi-save');
+  if (!btn) return;
+  const row = btn.closest('.pending-item');
+  const sellPrice = parseFloat(row.querySelector('.pi-sell').value);
+  const costRaw = row.querySelector('.pi-cost').value;
+  const costPrice = costRaw ? parseFloat(costRaw) : null;
+  if (!Number.isFinite(sellPrice) || sellPrice <= 0) { alert('पहले बिक्री कीमत भरें'); return; }
+  btn.disabled = true;
+  try {
+    await serverFetch('/api/pending-pricing/' + row.dataset.id + '/resolve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sellPrice, costPrice }),
+    });
+    await pollOnce();
+  } catch (err) { alert('⚠ ' + err.message); }
+  finally { btn.disabled = false; }
+});
+
 // ============ Settings ============
 function openSettings() {
   const c = getServerConfig();
@@ -305,7 +398,7 @@ $('settingsTestBtn').addEventListener('click', async () => {
   try {
     const s = await serverFetch('/api/status');
     box.className = 'result ok';
-    box.textContent = `✅ Connected — WhatsApp: ${s.connected ? 'connected' : (s.lastError || 'waiting')} · AI: ${s.aiConfigured ? 'on' : 'off'}`;
+    box.textContent = `✅ जुड़ा — WhatsApp: ${s.connected ? 'जुड़ा' : (s.lastError || 'इंतज़ार')} · AI: ${s.aiConfigured ? 'चालू' : 'बंद'}`;
   } catch (err) {
     box.className = 'result err';
     box.textContent = '⚠ ' + err.message;
@@ -587,12 +680,12 @@ async function init() {
   // Show the dashboard immediately — never a blank screen while the
   // (possibly sleeping) server wakes up.
   showDashboard();
-  setConnStatus('Connecting…', false);
+  setConnStatus('जुड़ रहे हैं…', false);
   let status = null;
   for (let i = 0; i < 3; i++) {
     try { status = await serverFetch('/api/status'); break; }
     catch (e) {
-      setConnStatus(`Waking server… (${i + 1}/3)`, false);
+      setConnStatus(`सर्वर जगा रहे हैं… (${i + 1}/3)`, false);
       await new Promise((r) => setTimeout(r, 3000));
     }
   }
@@ -605,7 +698,7 @@ async function init() {
     }
   } else {
     serverOk = false;
-    setConnStatus('Server unreachable — tap ⚙ to diagnose', false);
+    setConnStatus('सर्वर नहीं मिला — ⚙ दबाएँ', false);
   }
 }
 init();

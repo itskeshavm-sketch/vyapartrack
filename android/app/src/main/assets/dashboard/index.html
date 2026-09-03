@@ -1,52 +1,50 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="hi">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="theme-color" content="#0b3d2e" />
+  <meta name="theme-color" content="#0d1f17" />
   <title>VyaparTrack</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <!-- ================== ONBOARDING (Connect WhatsApp) ================== -->
+  <!-- ================== ONBOARDING ================== -->
   <div id="onboarding" class="onboarding hidden">
     <div class="ob-header">
       <div class="ob-logo">₹</div>
       <h1>VyaparTrack</h1>
-      <p>Track every order that lands on your WhatsApp, automatically.</p>
+      <p>आपके WhatsApp के हर ऑर्डर को अपने आप ट्रैक करें।<br><span class="en-sub">Track every WhatsApp order automatically.</span></p>
     </div>
 
     <div class="ob-step" id="ob-step-1">
-      <h2>1. Enter your number</h2>
-      <p class="muted">We'll generate a one-time code to link your WhatsApp.</p>
+      <h2>1. अपना नंबर डालें</h2>
+      <p class="muted">WhatsApp जोड़ने के लिए एक कोड मिलेगा।</p>
       <div class="input-row">
         <span class="cc">+91</span>
         <input id="obPhone" type="tel" inputmode="numeric" maxlength="10"
                placeholder="98765 43210" autocomplete="off" />
       </div>
-      <button id="obGetCodeBtn" class="btn-primary big">Get pairing code →</button>
+      <button id="obGetCodeBtn" class="btn-primary big">कोड पाएं →</button>
       <p class="muted small ob-error" id="obError"></p>
     </div>
 
     <div class="ob-step hidden" id="ob-step-2">
-      <h2>2. Open WhatsApp on your phone</h2>
-      <p class="muted">Then go to:</p>
+      <h2>2. WhatsApp खोलें</h2>
       <ol class="ob-steps">
         <li><b>Settings</b> ⚙️</li>
         <li><b>Linked devices</b></li>
         <li><b>Link a device</b></li>
-        <li>Tap <b>"Link with phone number instead"</b></li>
+        <li><b>"Link with phone number instead"</b></li>
       </ol>
-
-      <h2>3. Enter this code</h2>
+      <h2>3. यह कोड डालें</h2>
       <div class="code-card" id="obCodeBox">
         <div class="pair-code" id="obCode">···· ····</div>
-        <button id="obCopyBtn" class="btn-ghost">Copy</button>
+        <button id="obCopyBtn" class="btn-ghost">कॉपी</button>
       </div>
-      <p class="muted small" id="obStatus">Waiting for WhatsApp to connect…</p>
-      <button id="obOpenWABtn" class="btn-ghost">Open WhatsApp</button>
+      <p class="muted small" id="obStatus">WhatsApp जुड़ने का इंतज़ार…</p>
+      <button id="obOpenWABtn" class="btn-ghost">WhatsApp खोलें</button>
     </div>
   </div>
 
@@ -57,50 +55,89 @@
         <div class="brand-icon">₹</div>
         <div>
           <h1>VyaparTrack</h1>
-          <p id="connStatus">Connecting…</p>
+          <p id="connStatus">जुड़ रहे हैं…</p>
         </div>
       </div>
-      <button id="settingsBtn" class="icon-btn" title="Settings">⚙</button>
+      <button id="catalogBtn" class="icon-btn" title="आइटम / Items">🛒</button>
+      <button id="settingsBtn" class="icon-btn" title="सेटिंग्स">⚙</button>
     </header>
 
     <section class="stats">
-      <div class="stat"><span class="lbl">Orders</span><span class="val" id="statOrders">0</span></div>
-      <div class="stat green"><span class="lbl">Revenue</span><span class="val" id="statRevenue">₹0</span></div>
-      <div class="stat gold"><span class="lbl">Profit</span><span class="val" id="statProfit">₹0</span></div>
-      <div class="stat violet"><span class="lbl">Cost</span><span class="val" id="statCost">₹0</span></div>
+      <div class="stat"><span class="lbl">ऑर्डर</span><span class="val" id="statOrders">0</span></div>
+      <div class="stat green"><span class="lbl">कमाई</span><span class="val" id="statRevenue">₹0</span></div>
+      <div class="stat gold"><span class="lbl">मुनाफ़ा</span><span class="val" id="statProfit">₹0</span></div>
+      <div class="stat violet"><span class="lbl">खर्चा</span><span class="val" id="statCost">₹0</span></div>
+    </section>
+
+    <section id="pendingCard" class="card pending-card hidden">
+      <div class="card-head">
+        <h2>⏳ कीमत बतानी है</h2>
+        <span class="muted small" id="pendingCount"></span>
+      </div>
+      <p class="muted small pad-x">ग्राहक ने ऐसा सामान माँगा जिसकी कीमत आपने अभी तक नहीं बताई। एक बार कीमत भरें — आगे से अपने आप कैलकुलेट होगा।</p>
+      <div id="pendingList"></div>
     </section>
 
     <section class="card add-card">
-      <h2>Add order</h2>
-      <p class="muted small">Paste a WhatsApp message — AI extracts it.</p>
+      <h2>ऑर्डर जोड़ें</h2>
+      <p class="muted small">WhatsApp वाला मैसेज पेस्ट करें।</p>
       <form id="orderForm">
-        <input id="orderText" type="text" placeholder='e.g. Order from Mayank, 500g ladoo, +15% profit, cost 200' />
-        <button type="submit" class="btn-primary">Track</button>
+        <input id="orderText" type="text" placeholder='जैसे: भैया 500g लड्डू चाहिए' />
+        <button type="submit" class="btn-primary">जोड़ें</button>
       </form>
       <div id="formResult" class="result hidden"></div>
     </section>
 
     <section class="card orders-card">
       <div class="card-head">
-        <h2>Orders</h2>
+        <h2>ऑर्डर</h2>
         <div class="row-actions">
-          <button id="demoBtn" class="btn-ghost small">Demo</button>
+          <button id="demoBtn" class="btn-ghost small">डेमो</button>
           <button id="refreshBtn" class="btn-ghost small">↻</button>
         </div>
       </div>
       <div id="ordersList" class="orders-list">
-        <div class="empty">No orders yet. They'll appear here as customers message you on WhatsApp.</div>
+        <div class="empty">अभी कोई ऑर्डर नहीं। ग्राहक WhatsApp पर मैसेज करें तो यहाँ दिखेगा।</div>
       </div>
     </section>
 
-    <footer>v2.5.5 · native HTTP bridge · local cache + server sync</footer>
+    <footer>v2.6 · आइटम कैटलॉग · local cache + server sync</footer>
+  </div>
+
+  <!-- ================== CATALOG MODAL ================== -->
+  <div id="catalogModal" class="modal hidden">
+    <div class="modal-card">
+      <div class="card-head">
+        <h2>🛒 मेरे आइटम</h2>
+        <button class="icon-btn" id="catalogCloseBtn">✕</button>
+      </div>
+      <p class="muted small pad-x">जो बेचते हैं उसकी कीमत और खर्चा भरें। ऑर्डर आते ही कैलकुलेशन अपने आप होगी।</p>
+      <div id="catalogList" class="catalog-list"></div>
+      <div class="divider"></div>
+      <h3 class="pad-x">नया आइटम</h3>
+      <form id="catalogForm" class="catalog-form">
+        <input id="catalogName" type="text" placeholder="आइटम का नाम (जैसे लड्डू)" required />
+        <div class="triple-row">
+          <select id="catalogUnit">
+            <option value="g">ग्राम (g)</option>
+            <option value="kg">किलो (kg)</option>
+            <option value="l">लीटर (l)</option>
+            <option value="pcs">पीस (pcs)</option>
+            <option value="dozen">दर्जन</option>
+          </select>
+          <input id="catalogSell" type="number" inputmode="decimal" min="0" placeholder="बेचने ₹" required />
+          <input id="catalogCost" type="number" inputmode="decimal" min="0" placeholder="खर्चा ₹" />
+        </div>
+        <button type="submit" class="btn-primary">जोड़ें</button>
+      </form>
+    </div>
   </div>
 
   <!-- ================== SETTINGS MODAL ================== -->
   <div id="settingsModal" class="modal hidden">
     <div class="modal-card">
       <div class="card-head">
-        <h2>Settings</h2>
+        <h2>सेटिंग्स</h2>
         <button class="icon-btn" id="settingsCloseBtn">✕</button>
       </div>
       <label>Server URL</label>
@@ -109,11 +146,11 @@
       <input id="apiTokenInput" type="password" />
       <div id="settingsTest" class="result hidden"></div>
       <div class="modal-actions">
-        <button id="settingsTestBtn" class="btn-ghost">Test</button>
-        <button id="settingsDiagnoseBtn" class="btn-ghost">Diagnose</button>
-        <button id="settingsSaveBtn" class="btn-primary">Save</button>
+        <button id="settingsTestBtn" class="btn-ghost">टेस्ट</button>
+        <button id="settingsDiagnoseBtn" class="btn-ghost">जाँच</button>
+        <button id="settingsSaveBtn" class="btn-primary">सेव</button>
       </div>
-      <p class="muted small">Defaults are baked in. You usually don't need to change these.</p>
+      <p class="muted small">डिफ़ॉल्ट सेट हैं — आमतौर पर बदलने की ज़रूरत नहीं।</p>
     </div>
   </div>
 

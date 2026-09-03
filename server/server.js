@@ -81,6 +81,86 @@ function getStats() {
 }
 function round2(n) { return Math.round(n * 100) / 100; }
 
+// ============ Item catalog ============
+// The vendor teaches the app what they sell and at what price:
+//   { id, name, unit, sellPrice, costPrice }  -> sellPrice per unit, costPrice per unit
+// Orders mentioning a known item get priced automatically; unknown items go to
+// a "pending pricing" queue the vendor fills once, and the reply then works.
+const CATALOG_FILE = path.join(DATA_DIR, 'catalog.json');
+const PENDING_FILE = path.join(DATA_DIR, 'pending-pricing.json');
+function loadJson(file, fallback) {
+  try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; }
+}
+function saveJson(file, data) {
+  fs.writeFileSync(file, JSON.stringify(data, null, 2));
+}
+function loadCatalog() { return loadJson(CATALOG_FILE, []); }
+function saveCatalog(items) { saveJson(CATALOG_FILE, items); }
+function findCatalogItem(name) {
+  const n = String(name || '').toLowerCase().trim();
+  if (!n) return null;
+  const items = loadCatalog();
+  return items.find((it) => it.name.toLowerCase() === n)
+    || items.find((it) => n.includes(it.name.toLowerCase()) || it.name.toLowerCase().includes(n))
+    || null;
+}
+function loadPending() { return loadJson(PENDING_FILE, []); }
+function savePending(list) { saveJson(PENDING_FILE, list); }
+
+/** Fill in sell/cost from the catalog when the message didn't state prices. */
+function applyCatalogPricing(order) {
+  if (!order || !order.item || order.quantity == null) return order;
+  const item = findCatalogItem(order.item);
+  if (!item || item.sellPrice == null) return order;
+  const qty = order.quantity;
+  const knownUnit = order.unit && item.unit && order.unit === item.unit;
+  const unitAgnostic = !order.unit || !item.unit || knownUnit;
+  if (!unitAgnostic) return order;
+  const priced = { ...order };
+  if (priced.totalAmount == null) priced.totalAmount = round2(item.sellPrice * qty);
+  if (priced.costPrice == null && item.costPrice != null) priced.costPrice = round2(item.costPrice * qty);
+  if (priced.costPrice != null && priced.totalAmount != null) {
+    priced.profitAmount = round2(priced.totalAmount - priced.costPrice);
+    priced.profitPercent = priced.costPrice > 0 ? round2((priced.profitAmount / priced.costPrice) * 100) : null;
+  }
+  priced.pricedBy = 'catalog';
+  return priced;
+}
+
+/** Record an unmatched item for the vendor to price later. */
+function addPendingPricing(order, customerJid) {
+  if (!order || !order.item || order.quantity == null) return;
+  const list = loadPending();
+  const key = `${String(order.item).toLowerCase().trim()}|${order.unit || ''}`;
+  const existing = list.find((p) => p.key === key);
+  if (existing) {
+    existing.examples.unshift({ orderId: order.id, customer: order.customer, jid: customerJid, at: new Date().toISOString() });
+    existing.examples = existing.examples.slice(0, 5);
+  } else {
+    list.unshift({
+      id: crypto.randomUUID(),
+      key,
+      item: order.item,
+      unit: order.unit || null,
+      examples: [{ orderId: order.id, customer: order.customer, jid: customerJid, at: new Date().toISOString() }],
+      askedAt: new Date().toISOString(),
+    });
+  }
+  savePending(list);
+}
+
+/** Hindi question sent to the vendor when a new item needs pricing. */
+function pricingQuestionText(p) {
+  const qty = p.unit ? `${p.examples[0] ? '' : ''}` : '';
+  const itemLabel = p.unit ? `${p.item} (${p.unit})` : p.item;
+  return (
+    `🛒 नया आइटम मिला: *${itemLabel}*\n\n` +
+    `1️⃣ आप इसे कितने में बेचते हैं? (₹ प्रति ${p.unit || 'यूनिट'})\n` +
+    `2️⃣ इसमें आपका खर्चा कितना है? (₹ प्रति ${p.unit || 'यूनिट'})\n\n` +
+    `ऐप में खोलकर भरें: Settings → Pricing`
+  );
+}
+
 // ============ Poolside AI parser ============
 const SYSTEM_PROMPT = `You are an order-extraction engine for small Indian businesses.
 Extract a JSON object from the message with EXACTLY these fields:
@@ -373,6 +453,27 @@ async function parseOrder(text) {
   return parseWithRegex(text);
 }
 
+/** Shared order pipeline: catalog pricing + pending queue. Used by bot AND REST API. */
+async function recordParsedOrder(parsed, senderName, senderJid) {
+  const priced = applyCatalogPricing(parsed);
+  const rec = addOrder({ ...priced, customer: senderName || parsed.customer, source: parsed.source });
+  if (senderJid) scheduleNameBackfill(rec.id, senderJid);
+
+  // Unknown item with a quantity? Queue it so the vendor can price it once.
+  if (!priced.pricedBy && priced.item && priced.quantity != null) {
+    const before = loadPending().map((p) => p.key);
+    addPendingPricing(priced, senderJid);
+    const fresh = loadPending().find((p) => !before.includes(p.key));
+    // Ask the vendor in their own WhatsApp chat ("Message yourself")
+    if (fresh && sock && sock.user) {
+      try {
+        await sock.sendMessage(jidNormalizedUser(sock), { text: pricingQuestionText(fresh) });
+      } catch {}
+    }
+  }
+  return rec;
+}
+
 // ============ WhatsApp bot ============
 let sock = null;
 
@@ -537,18 +638,21 @@ async function startBot() {
       const order = await parseOrder(text);
       if (!order) return;
 
-      const rec = addOrder({ ...order, customer: senderName || order.customer, source: 'whatsapp' });
+      // Catalog pricing + pending queue (shared with the REST API)
+      const rec = await recordParsedOrder(order, senderName, senderJid);
       console.log(`[bot] Order: ${rec.customer} | from ${senderJid} pushName=${msg.pushName || 'none'} | ${rec.quantity ?? ''}${rec.unit ?? ''} ${rec.item} | total ${rec.totalAmount ?? '-'}`);
-      scheduleNameBackfill(rec.id, senderJid);
 
       if (process.env.AUTO_REPLY !== 'false') {
+        const pricedReply = rec.totalAmount != null;
         await sock.sendMessage(msg.key.remoteJid, {
-          text:
-            `✅ *Order tracked*\n` +
-            `👤 ${rec.customer}\n` +
-            `📦 ${rec.quantity ?? '—'}${rec.unit ? ' ' + rec.unit : ''} ${rec.item}\n` +
-            `💰 Cost: ₹${rec.costPrice ?? '—'} | Profit: ₹${rec.profitAmount ?? '—'}${rec.profitPercent != null ? ` (${rec.profitPercent}%)` : ''}\n` +
-            `🧾 Total: ₹${rec.totalAmount ?? '—'}`,
+          text: pricedReply
+            ? `✅ *ऑर्डर मिल गया!*\n` +
+              `👤 ${rec.customer}\n` +
+              `📦 ${rec.quantity ?? '—'}${rec.unit ? ' ' + rec.unit : ''} ${rec.item}\n` +
+              `💰 लागत: ₹${rec.costPrice ?? '—'} | मुनाफ़ा: ₹${rec.profitAmount ?? '—'}${rec.profitPercent != null ? ` (${rec.profitPercent}%)` : ''}\n` +
+              `🧾 कुल: ₹${rec.totalAmount ?? '—'}\n\nधन्यवाद! 🙏`
+            : `✅ *आपका ऑर्डर मिल गया!* ${rec.quantity ?? ''}${rec.unit ? ' ' + rec.unit : ''} ${rec.item}\n` +
+              `🧾 कीमत जल्द ही कन्फर्म होगी। धन्यवाद! 🙏`,
         }, { quoted: msg });
       }
     } catch (err) {
@@ -565,6 +669,51 @@ async function requestPairingCode(phoneRaw) {
   const code = await sock.requestPairingCode(phone);
   botStatus.pairingCode = code;
   return code;
+}
+
+/** Vendor's own jid ("Message yourself") for price questions and notices. */
+function jidNormalizedUser(sock) {
+  const raw = String(sock?.user?.id || '');
+  return raw.includes('@') ? raw : raw.replace(/[^0-9]/g, '') + '@s.whatsapp.net';
+}
+
+/** Vendor fills prices for a pending item -> save to catalog, re-price open orders. */
+function resolvePendingItem(pendingId, sellPrice, costPrice, unit) {
+  const list = loadPending();
+  const p = list.find((x) => x.id === pendingId);
+  if (!p) return null;
+  const items = loadCatalog();
+  const existing = items.find((it) => it.name.toLowerCase() === p.item.toLowerCase());
+  const entry = existing || {
+    id: crypto.randomUUID(),
+    name: p.item,
+    unit: unit || p.unit || null,
+  };
+  entry.sellPrice = sellPrice;
+  entry.costPrice = costPrice;
+  if (unit) entry.unit = unit;
+  if (!existing) items.unshift(entry);
+  saveCatalog(items);
+  savePending(list.filter((x) => x.id !== pendingId));
+
+  // Re-price older orders of the same item that were left without totals
+  const orders = loadOrders();
+  let updated = 0;
+  for (const o of orders) {
+    if (!o.item || o.item.toLowerCase() !== p.item.toLowerCase()) continue;
+    if (o.totalAmount != null && o.costPrice != null) continue;
+    if (o.quantity == null) continue;
+    if (o.unit && entry.unit && o.unit !== entry.unit) continue;
+    if (o.totalAmount == null) o.totalAmount = round2(entry.sellPrice * o.quantity);
+    if (o.costPrice == null && entry.costPrice != null) o.costPrice = round2(entry.costPrice * o.quantity);
+    if (o.costPrice != null && o.totalAmount != null) {
+      o.profitAmount = round2(o.totalAmount - o.costPrice);
+      o.profitPercent = o.costPrice > 0 ? round2((o.profitAmount / o.costPrice) * 100) : null;
+    }
+    updated++;
+  }
+  if (updated) saveOrders(orders);
+  return { entry, updated };
 }
 
 // ============ Express API ============
@@ -601,7 +750,9 @@ app.post('/api/orders', auth, async (req, res) => {
   if (!text) return res.status(400).json({ error: 'Provide { "text": "..." }' });
   const parsed = await parseOrder(text);
   if (!parsed) return res.status(422).json({ error: 'Could not find an order in that message' });
-  res.status(201).json(addOrder(parsed));
+  parsed.source = parsed.source === 'regex' ? 'manual' : parsed.source;
+  const rec = await recordParsedOrder(parsed, parsed.customer, null);
+  res.status(201).json(rec);
 });
 app.delete('/api/orders/:id', auth, (req, res) => res.json({ deleted: deleteOrder(req.params.id) }));
 app.post('/api/demo', auth, (req, res) => {
@@ -619,6 +770,42 @@ app.get('/api/contacts', auth, (req, res) => res.json({
   savedNames: Object.fromEntries(contactNames),
   lidToPn: Object.fromEntries(lidToPn),
 }));
+
+// ---- Item catalog ----
+app.get('/api/catalog', auth, (req, res) => res.json(loadCatalog()));
+app.post('/api/catalog', auth, (req, res) => {
+  const name = String(req.body?.name || '').trim();
+  if (!name) return res.status(400).json({ error: 'name required' });
+  const items = loadCatalog();
+  const existing = items.find((it) => it.name.toLowerCase() === name.toLowerCase());
+  const entry = existing || { id: crypto.randomUUID(), name };
+  if (req.body?.unit != null) entry.unit = req.body.unit || null;
+  if (req.body?.sellPrice != null) entry.sellPrice = Number(req.body.sellPrice) || null;
+  if (req.body?.costPrice != null) entry.costPrice = Number(req.body.costPrice) || null;
+  if (!existing) items.unshift(entry);
+  saveCatalog(items);
+  res.json(entry);
+});
+app.delete('/api/catalog/:id', auth, (req, res) => {
+  const items = loadCatalog();
+  const next = items.filter((it) => it.id !== req.params.id);
+  saveCatalog(next);
+  res.json({ deleted: next.length !== items.length });
+});
+
+// ---- Pending pricing (items awaiting the vendor's prices) ----
+app.get('/api/pending-pricing', auth, (req, res) => res.json(loadPending()));
+app.post('/api/pending-pricing/:id/resolve', auth, (req, res) => {
+  const sellPrice = Number(req.body?.sellPrice);
+  const costPrice = req.body?.costPrice != null ? Number(req.body.costPrice) : null;
+  const unit = req.body?.unit != null ? String(req.body.unit) : null;
+  if (!Number.isFinite(sellPrice) || sellPrice <= 0) {
+    return res.status(400).json({ error: 'sellPrice (number > 0) required' });
+  }
+  const result = resolvePendingItem(req.params.id, sellPrice, costPrice, unit);
+  if (!result) return res.status(404).json({ error: 'pending item not found' });
+  res.json(result);
+});
 
 app.listen(PORT, () => {
   console.log(`VyaparTrack server on :${PORT}`);
