@@ -377,16 +377,26 @@ async function parseOrder(text) {
 let sock = null;
 
 // jid -> saved WhatsApp contact name (from the user's address book).
+// Indexed by BOTH the phone jid and the LID jid - messages may arrive as either.
 // Profile names (pushName) are kept separately and never override saved names.
 const contactNames = new Map();
+const lidToPn = new Map();
 function rememberContact(c) {
-  if (!c || !c.id) return;
-  if (c.name) contactNames.set(c.id, c.name); // saved address-book name (highest priority)
+  if (!c || !c.id || !c.name) return;
+  contactNames.set(c.id, c.name);
+  if (c.lid) contactNames.set(c.lid, c.name);
+}
+function rememberLidMapping(m) {
+  if (!m || !m.lid || !m.pn) return;
+  lidToPn.set(m.lid, m.pn);
+  const name = contactNames.get(m.lid) || contactNames.get(m.pn);
+  if (name) { contactNames.set(m.lid, name); contactNames.set(m.pn, name); }
 }
 
-/** Resolve who sent the message: saved contact name -> profile name (pushName) -> +number. */
+/** Resolve sender: saved contact name (via jid or linked phone jid) -> pushName -> +number. */
 async function resolveSenderName(jid, pushName) {
-  const saved = contactNames.get(jid);
+  const pn = lidToPn.get(jid);
+  const saved = contactNames.get(jid) || (pn && contactNames.get(pn)) || null;
   if (saved) return saved;
   if (pushName) return pushName;
   const digits = String(jid).split('@')[0].replace(/\D/g, '');
@@ -420,10 +430,13 @@ async function startBot() {
   sock.ev.on('messaging-history.set', ({ contacts = [], chats = [] } = {}) => {
     contacts.forEach(rememberContact);
     chats.forEach((ch) => { if (ch.name && ch.id) contactNames.set(ch.id, ch.name); });
+    console.log(`[contacts] history sync: ${contacts.length} contacts, map now has ${contactNames.size} names`);
   });
   // New/renamed contacts saved while connected
   sock.ev.on('contacts.upsert', (cs) => cs.forEach(rememberContact));
   sock.ev.on('contacts.update', (cs) => cs.forEach(rememberContact));
+  // Link LID jids (how messages arrive) to phone jids (how contacts are saved)
+  sock.ev.on('lid-mapping.update', rememberLidMapping);
 
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update;
@@ -472,7 +485,7 @@ async function startBot() {
       if (!order) return;
 
       const rec = addOrder({ ...order, customer: senderName || order.customer, source: 'whatsapp' });
-      console.log(`[bot] Order: ${rec.customer} | ${rec.quantity ?? ''}${rec.unit ?? ''} ${rec.item} | total ${rec.totalAmount ?? '-'}`);
+      console.log(`[bot] Order: ${rec.customer} | from ${senderJid} pushName=${msg.pushName || 'none'} | ${rec.quantity ?? ''}${rec.unit ?? ''} ${rec.item} | total ${rec.totalAmount ?? '-'}`);
 
       if (process.env.AUTO_REPLY !== 'false') {
         await sock.sendMessage(msg.key.remoteJid, {
@@ -547,6 +560,11 @@ app.post('/api/demo', auth, (req, res) => {
   res.json({ ok: true, count: demo.length });
 });
 app.get('/api/stats', auth, (req, res) => res.json(getStats()));
+// Debug: what names the bot has learned (saved contacts + LID mappings)
+app.get('/api/contacts', auth, (req, res) => res.json({
+  savedNames: Object.fromEntries(contactNames),
+  lidToPn: Object.fromEntries(lidToPn),
+}));
 
 app.listen(PORT, () => {
   console.log(`VyaparTrack server on :${PORT}`);

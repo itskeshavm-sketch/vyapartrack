@@ -27,16 +27,26 @@ const AUTH_DIR = process.env.VYAPAR_AUTH_DIR || path.join(__dirname, '..', 'auth
 
 let sock = null;
 // jid -> saved WhatsApp contact name (from the user's address book).
+// Indexed by BOTH the phone jid and the LID jid - messages may arrive as either.
 // Profile names (pushName) are kept separately and never override saved names.
 const contactNames = new Map();
+const lidToPn = new Map();
 function rememberContact(c) {
-  if (!c || !c.id) return;
-  if (c.name) contactNames.set(c.id, c.name); // saved address-book name (highest priority)
+  if (!c || !c.id || !c.name) return;
+  contactNames.set(c.id, c.name);
+  if (c.lid) contactNames.set(c.lid, c.name);
+}
+function rememberLidMapping(m) {
+  if (!m || !m.lid || !m.pn) return;
+  lidToPn.set(m.lid, m.pn);
+  const name = contactNames.get(m.lid) || contactNames.get(m.pn);
+  if (name) { contactNames.set(m.lid, name); contactNames.set(m.pn, name); }
 }
 
-/** Resolve who sent the message: saved contact name -> profile name (pushName) -> +number. */
+/** Resolve sender: saved contact name (via jid or linked phone jid) -> pushName -> +number. */
 async function resolveSenderName(jid, pushName) {
-  const saved = contactNames.get(jid);
+  const pn = lidToPn.get(jid);
+  const saved = contactNames.get(jid) || (pn && contactNames.get(pn)) || null;
   if (saved) return saved;
   if (pushName) return pushName;
   const digits = String(jid).split('@')[0].replace(/\D/g, '');
@@ -87,6 +97,8 @@ async function startBot(onOrderRecorded) {
   // New/renamed contacts saved while connected
   sock.ev.on('contacts.upsert', (cs) => cs.forEach(rememberContact));
   sock.ev.on('contacts.update', (cs) => cs.forEach(rememberContact));
+  // Link LID jids (how messages arrive) to phone jids (how contacts are saved)
+  sock.ev.on('lid-mapping.update', rememberLidMapping);
 
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update;
