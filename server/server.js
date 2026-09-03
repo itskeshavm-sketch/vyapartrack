@@ -381,16 +381,61 @@ let sock = null;
 // Profile names (pushName) are kept separately and never override saved names.
 const contactNames = new Map();
 const lidToPn = new Map();
+// Persisted to the Render disk so names survive restarts/redeploys
+const CONTACTS_FILE = path.join(DATA_DIR, 'contacts.json');
+function saveContacts() {
+  try { fs.writeFileSync(CONTACTS_FILE, JSON.stringify({ savedNames: [...contactNames], lidToPn: [...lidToPn] })); } catch {}
+}
+function loadContacts() {
+  try {
+    const d = JSON.parse(fs.readFileSync(CONTACTS_FILE, 'utf8'));
+    for (const [k, v] of d.savedNames || []) contactNames.set(k, v);
+    for (const [k, v] of d.lidToPn || []) lidToPn.set(k, v);
+  } catch {}
+}
+loadContacts();
 function rememberContact(c) {
   if (!c || !c.id || !c.name) return;
   contactNames.set(c.id, c.name);
   if (c.lid) contactNames.set(c.lid, c.name);
+  saveContacts();
+  flushPendingNames();
 }
 function rememberLidMapping(m) {
   if (!m || !m.lid || !m.pn) return;
   lidToPn.set(m.lid, m.pn);
   const name = contactNames.get(m.lid) || contactNames.get(m.pn);
   if (name) { contactNames.set(m.lid, name); contactNames.set(m.pn, name); }
+  saveContacts();
+  flushPendingNames();
+}
+
+/** Saved address-book name for a jid (LID or phone), or null. */
+function savedNameFor(jid) {
+  const pn = lidToPn.get(jid);
+  return contactNames.get(jid) || (pn && contactNames.get(pn)) || null;
+}
+
+// Orders recorded before a contact name was known get backfilled once it arrives
+const pendingNames = new Map(); // orderId -> jid
+function updateOrderCustomer(orderId, name) {
+  const orders = loadOrders();
+  const rec = orders.find((o) => o.id === orderId);
+  if (!rec || rec.customer === name) return false;
+  rec.customer = name;
+  saveOrders(orders);
+  return true;
+}
+function flushPendingNames() {
+  for (const [orderId, jid] of [...pendingNames]) {
+    const name = savedNameFor(jid);
+    if (name && updateOrderCustomer(orderId, name)) pendingNames.delete(orderId);
+  }
+}
+function scheduleNameBackfill(orderId, jid) {
+  if (pendingNames.has(orderId)) return;
+  pendingNames.set(orderId, jid);
+  for (const delay of [5000, 20000, 60000]) setTimeout(flushPendingNames, delay);
 }
 
 /** Resolve sender: saved contact name (via jid or linked phone jid) -> pushName -> +number. */
@@ -472,20 +517,29 @@ async function startBot() {
     try {
       if (type !== 'notify') return;
       const msg = messages[0];
-      if (!msg.message || msg.key.fromMe || msg.key.remoteJid === 'status@broadcast') return;
+      if (!msg.message || msg.key.fromMe) return;
+      // Ignore newsletters/channels and broadcast statuses - marketing posts
+      // there were being parsed as phantom orders.
+      const jid = String(msg.key.remoteJid);
+      if (jid === 'status@broadcast' || jid.endsWith('@broadcast') || jid.endsWith('@newsletter')) return;
       const senderJid = msg.key.participant || msg.key.remoteJid; // handles groups too
-      const senderName = await resolveSenderName(senderJid, msg.pushName);
       const text = msg.message.conversation
         || msg.message.extendedTextMessage?.text
         || msg.message.imageMessage?.caption
         || '';
       if (!text) return;
+      // Ignore messages that are mostly links (spam/marketing)
+      const linkCount = (text.match(/https?:\/\//gi) || []).length;
+      if (linkCount >= 1 && text.replace(/https?:\/\/\S+/gi, '').trim().length < 20) return;
+
+      const senderName = await resolveSenderName(senderJid, msg.pushName);
 
       const order = await parseOrder(text);
       if (!order) return;
 
       const rec = addOrder({ ...order, customer: senderName || order.customer, source: 'whatsapp' });
       console.log(`[bot] Order: ${rec.customer} | from ${senderJid} pushName=${msg.pushName || 'none'} | ${rec.quantity ?? ''}${rec.unit ?? ''} ${rec.item} | total ${rec.totalAmount ?? '-'}`);
+      scheduleNameBackfill(rec.id, senderJid);
 
       if (process.env.AUTO_REPLY !== 'false') {
         await sock.sendMessage(msg.key.remoteJid, {

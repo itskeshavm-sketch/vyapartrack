@@ -143,7 +143,10 @@ async function startBot(onOrderRecorded) {
     try {
       if (type !== 'notify') return;
       const msg = messages[0];
-      if (!msg.message || msg.key.fromMe || msg.key.remoteJid === 'status@broadcast') return;
+      if (!msg.message || msg.key.fromMe) return;
+      // Ignore newsletters/channels and broadcasts - marketing gets parsed as phantom orders
+      const jid = String(msg.key.remoteJid);
+      if (jid === 'status@broadcast' || jid.endsWith('@broadcast') || jid.endsWith('@newsletter')) return;
 
       const text =
         msg.message.conversation ||
@@ -151,12 +154,15 @@ async function startBot(onOrderRecorded) {
         msg.message.imageMessage?.caption ||
         '';
       if (!text) return;
-
-      const order = await extract(text);
-      if (!order) return;
+      // Ignore messages that are mostly links (spam/marketing)
+      const linkCount = (text.match(/https?:\/\//gi) || []).length;
+      if (linkCount >= 1 && text.replace(/https?:\/\/\S+/gi, '').trim().length < 20) return;
 
       const senderJid = msg.key.participant || msg.key.remoteJid;
       const senderName = await resolveSenderName(senderJid, msg.pushName);
+      const order = await extract(text);
+      if (!order) return;
+
       const record = store.addOrder({ ...order, customer: senderName || order.customer, source: 'whatsapp' });
       console.log(`[bot] Order tracked: ${record.customer} | ${record.quantity ?? ''}${record.unit ?? ''} ${record.item} | cost ${record.costPrice ?? '-'} | profit ${record.profitAmount ?? '-'} (${record.profitPercent ?? '-'}%) | total ${record.totalAmount ?? '-'}`);
       if (onOrderRecorded) onOrderRecorded(record);
