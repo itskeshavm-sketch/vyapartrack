@@ -337,14 +337,17 @@ async function renderCatalog() {
     return;
   }
   const unitHi = { kg: 'किलो', g: 'ग्राम', ml: 'मिली', l: 'लीटर', pcs: 'पीस', dozen: 'दर्जन' };
-  list.innerHTML = items.map((it) => `
+  list.innerHTML = items.map((it) => {
+    const pw = it.pieceWeight ? ` · 1 पीस ≈ ${fmt.format(it.pieceWeight)} ग्राम` : '';
+    return `
     <div class="catalog-row">
       <div class="c-info">
-        <div class="c-name">${escapeHtml(it.name)} <span class="muted small">(${unitHi[it.unit] || it.unit || '—'})</span></div>
+        <div class="c-name">${escapeHtml(it.name)} <span class="muted small">(${unitHi[it.unit] || it.unit || '—'}${pw})</span></div>
         <div class="c-prices">बिक्री ₹${it.sellPrice ?? '—'} · खर्चा ₹${it.costPrice ?? '—'} → मुनाफ़ा ₹${(it.sellPrice != null && it.costPrice != null) ? fmt.format(round2(it.sellPrice - it.costPrice)) : '—'}</div>
       </div>
       <button class="c-del" data-id="${it.id}" title="हटाएं">✕</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 $('catalogList').addEventListener('click', async (e) => {
   const btn = e.target.closest('.c-del');
@@ -352,20 +355,29 @@ $('catalogList').addEventListener('click', async (e) => {
   try { await serverFetch('/api/catalog/' + btn.dataset.id, { method: 'DELETE' }); } catch {}
   renderCatalog();
 });
+function togglePieceWeight() {
+  const isPcs = $('catalogUnit').value === 'pcs' || $('catalogUnit').value === 'dozen';
+  $('catalogPieceWeight').classList.toggle('hidden', !isPcs);
+}
+$('catalogUnit').addEventListener('change', togglePieceWeight);
+// Trigger once at load in case the select defaults sensibly
+togglePieceWeight();
 $('catalogForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const name = $('catalogName').value.trim();
   const unit = $('catalogUnit').value;
   const sellPrice = parseFloat($('catalogSell').value);
   const costPrice = $('catalogCost').value ? parseFloat($('catalogCost').value) : null;
+  const pwRaw = $('catalogPieceWeight').value;
+  const pieceWeight = pwRaw ? parseFloat(pwRaw) : null;
   if (!name || !Number.isFinite(sellPrice)) return;
   try {
     await serverFetch('/api/catalog', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, unit, sellPrice, costPrice }),
+      body: JSON.stringify({ name, unit, sellPrice, costPrice, pieceWeight }),
     });
-    $('catalogName').value = ''; $('catalogSell').value = ''; $('catalogCost').value = '';
+    $('catalogName').value = ''; $('catalogSell').value = ''; $('catalogCost').value = ''; $('catalogPieceWeight').value = '';
     renderCatalog();
     refreshPending();
   } catch (err) { alert('⚠ ' + err.message); }
@@ -382,7 +394,9 @@ async function refreshPending() {
   card.classList.remove('hidden');
   $('pendingCount').textContent = items.length + ' आइटम';
   const unitHi = { kg: 'किलो', g: 'ग्राम', ml: 'मिली', l: 'लीटर', pcs: 'पीस', dozen: 'दर्जन' };
-  $('pendingList').innerHTML = items.map((p) => `
+  $('pendingList').innerHTML = items.map((p) => {
+    const showPw = p.unit === 'pcs' || p.unit === 'dozen' || !p.unit;
+    return `
     <div class="pending-item" data-id="${p.id}">
       <div class="pi-info">
         <div class="pi-name">${escapeHtml(p.item)}</div>
@@ -390,8 +404,10 @@ async function refreshPending() {
       </div>
       <input class="pi-sell" type="number" inputmode="decimal" min="0" placeholder="बिक्री ₹" />
       <input class="pi-cost" type="number" inputmode="decimal" min="0" placeholder="खर्चा ₹" />
+      <input class="pi-pw ${showPw ? '' : 'hidden'}" type="number" inputmode="decimal" min="0" placeholder="1 पीस = ? ग्राम" />
       <button class="pi-save">सेव</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 $('pendingList').addEventListener('click', async (e) => {
   const btn = e.target.closest('.pi-save');
@@ -400,13 +416,16 @@ $('pendingList').addEventListener('click', async (e) => {
   const sellPrice = parseFloat(row.querySelector('.pi-sell').value);
   const costRaw = row.querySelector('.pi-cost').value;
   const costPrice = costRaw ? parseFloat(costRaw) : null;
+  const pwEl = row.querySelector('.pi-pw');
+  const pwRaw = pwEl && !pwEl.classList.contains('hidden') && pwEl.value ? pwEl.value : null;
+  const pieceWeight = pwRaw ? parseFloat(pwRaw) : null;
   if (!Number.isFinite(sellPrice) || sellPrice <= 0) { alert('पहले बिक्री कीमत भरें'); return; }
   btn.disabled = true;
   try {
     await serverFetch('/api/pending-pricing/' + row.dataset.id + '/resolve', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sellPrice, costPrice }),
+      body: JSON.stringify({ sellPrice, costPrice, pieceWeight }),
     });
     await pollOnce();
   } catch (err) { alert('⚠ ' + err.message); }

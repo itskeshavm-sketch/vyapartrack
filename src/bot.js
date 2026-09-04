@@ -33,23 +33,30 @@ let sock = null;
 const contactNames = new Map();
 const lidToPn = new Map();
 function rememberContact(c) {
-  if (!c || !c.id || !c.name) return;
+  if (!c || !c.id || !c.name || isMaskedName(c.name)) return;
   contactNames.set(c.id, c.name);
   if (c.lid) contactNames.set(c.lid, c.name);
 }
 function rememberLidMapping(m) {
   if (!m || !m.lid || !m.pn) return;
+  if (lidToPn.get(m.lid) === m.pn) return; // already known
   lidToPn.set(m.lid, m.pn);
   const name = contactNames.get(m.lid) || contactNames.get(m.pn);
   if (name) { contactNames.set(m.lid, name); contactNames.set(m.pn, name); }
 }
 
-/** Resolve sender: saved contact name (via jid or linked phone jid) -> pushName -> +number. */
+/** WhatsApp reports masked phones ("+91………39") as display names - never treat those as names. */
+function isMaskedName(name) { return /[•…]/.test(String(name || '')); }
+
+/**
+ * Sender display: saved contact name -> real phone number. Never the WhatsApp
+ * profile/display name (it's often a masked "+91………39" or a random nickname).
+ */
 async function resolveSenderName(jid, pushName) {
+  void pushName; // intentionally unused - display names are not shown
   const pn = lidToPn.get(jid);
   const saved = contactNames.get(jid) || (pn && contactNames.get(pn)) || null;
-  if (saved) return saved;
-  if (pushName) return pushName;
+  if (saved && !isMaskedName(saved)) return saved;
   const digits = String(jid).split('@')[0].replace(/\D/g, '');
   return digits ? '+' + digits : jid;
 }
@@ -227,7 +234,17 @@ async function startBot(onOrderRecorded) {
       const linkCount = (text.match(/https?:\/\//gi) || []).length;
       if (linkCount >= 1 && text.replace(/https?:\/\/\S+/gi, '').trim().length < 20) return;
 
-      const senderJid = msg.key.participant || msg.key.remoteJid;
+      // Learn phone <-> LID from the message key so saved contact names resolve
+      const senderAlt = msg.key.participantAlt || msg.key.remoteJidAlt;
+      if (senderAlt) {
+        const altIsLid = senderAlt.endsWith('@lid');
+        const lid = altIsLid ? senderAlt : senderJid;
+        const pn = altIsLid ? senderJid : senderAlt;
+        if (lid.endsWith('@lid') && pn.endsWith('@s.whatsapp.net')) {
+          rememberLidMapping({ lid, pn });
+        }
+      }
+
       const senderName = await resolveSenderName(senderJid, msg.pushName);
       const order = await extract(text);
       if (!order) return;

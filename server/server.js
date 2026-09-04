@@ -49,11 +49,59 @@ function addOrder(o) {
     profitAmount: o.profitAmount ?? null,
     totalAmount: o.totalAmount ?? null,
     source: o.source || 'manual',
-    raw: o.raw || null,
+    pricedBy: o.pricedBy ?? null,
+    pricedTotalBy: o.pricedTotalBy ?? null,
+    pricedCostBy: o.pricedCostBy ?? null,
+    raw: o.raw ?? null,
   };
   orders.unshift(rec);
   saveOrders(orders);
   return rec;
+}
+
+/**
+ * Price/refresh orders of this catalog item. Fills orders still awaiting a
+ * price and recalculates ones priced by the catalog earlier (so fixing a
+ * catalog entry fixes wrong math). Orders whose prices came from the
+ * customer's message are never touched.
+ * Returns the number of orders updated.
+ */
+function repriceOrdersForItem(entry) {
+  if (!entry || entry.sellPrice == null) return 0;
+  const eTerms = nameTerms(entry.name);
+  const orders = loadOrders();
+  let updated = 0;
+  for (const o of orders) {
+    if (!o.item || o.quantity == null) continue;
+    // Only touch orders whose total is missing or was calculated by the catalog.
+    // Message-stated prices (and legacy orders) are never overwritten.
+    if (o.pricedTotalBy !== 'catalog' && o.totalAmount != null) continue;
+    const oTerms = nameTerms(o.item);
+    const sameItem = oTerms.size > 0 && eTerms.size > 0
+      ? [...eTerms].some((t) => oTerms.has(t))
+      : o.item.toLowerCase() === entry.name.toLowerCase();
+    if (!sameItem) continue;
+    const qtyIn = convertQty(o.quantity, o.unit, entry.unit, entry.pieceWeight);
+    if (qtyIn == null) continue; // incompatible units - leave the order alone
+    if (o.pricedTotalBy === 'catalog' || o.totalAmount == null) {
+      o.totalAmount = round2(entry.sellPrice * qtyIn);
+      o.pricedTotalBy = 'catalog';
+    }
+    if (o.pricedCostBy === 'catalog') {
+      if (entry.costPrice != null) o.costPrice = round2(entry.costPrice * qtyIn);
+    } else if (o.costPrice == null && entry.costPrice != null) {
+      o.costPrice = round2(entry.costPrice * qtyIn);
+      o.pricedCostBy = 'catalog';
+    }
+    if (o.costPrice != null && o.totalAmount != null) {
+      o.profitAmount = round2(o.totalAmount - o.costPrice);
+      o.profitPercent = o.costPrice > 0 ? round2((o.profitAmount / o.costPrice) * 100) : null;
+    }
+    o.pricedBy = 'catalog';
+    updated++;
+  }
+  if (updated) saveOrders(orders);
+  return updated;
 }
 function deleteOrder(id) {
   const before = loadOrders();
@@ -148,13 +196,28 @@ function findCatalogItem(name) {
 function loadPending() { return loadJson(PENDING_FILE, []); }
 function savePending(list) { saveJson(PENDING_FILE, list); }
 
-/** Convert a quantity between compatible units (kg<->g, l<->ml, dozen<->pcs). */
+/**
+ * Convert a quantity between compatible units.
+ * kg<->g, l<->ml, dozen<->pcs always; count<->mass (pcs/dozen <-> kg/g) also
+ * works when the catalog item declares pieceWeight (grams per piece).
+ */
 const UNIT_DIMENSION = { kg: 'mass', g: 'mass', ml: 'volume', l: 'volume', pcs: 'count', dozen: 'count' };
 const UNIT_TO_BASE = { kg: 1000, g: 1, ml: 1, l: 1000, pcs: 1, dozen: 12 };
-function convertQty(qty, fromUnit, toUnit) {
+function convertQty(qty, fromUnit, toUnit, pieceWeight) {
   if (qty == null) return null;
   if (!fromUnit || !toUnit || fromUnit === toUnit) return qty;
-  if (UNIT_DIMENSION[fromUnit] !== UNIT_DIMENSION[toUnit]) return null;
+  const fd = UNIT_DIMENSION[fromUnit];
+  const td = UNIT_DIMENSION[toUnit];
+  if (fd !== td) {
+    // count <-> mass bridge via grams-per-piece
+    if ((fd === 'count' && td === 'mass') || (fd === 'mass' && td === 'count')) {
+      const pw = Number(pieceWeight);
+      if (!Number.isFinite(pw) || pw <= 0) return null;
+      const grams = qty * (UNIT_TO_BASE[fromUnit] || 1) * (fd === 'count' ? pw : 1) / (fd === 'count' ? 1 : pw);
+      return round2(td === 'kg' ? grams / 1000 : grams);
+    }
+    return null;
+  }
   return round2(qty * (UNIT_TO_BASE[fromUnit] / UNIT_TO_BASE[toUnit]));
 }
 
@@ -166,17 +229,26 @@ function applyCatalogPricing(order) {
   const qty = order.quantity;
   const knownUnit = order.unit && item.unit && order.unit === item.unit;
   const unitAgnostic = !order.unit || !item.unit || knownUnit;
-  // Convert when the order unit differs but is compatible ("500 ml" vs catalog per "l")
-  const qtyInItemUnits = unitAgnostic ? qty : convertQty(qty, order.unit, item.unit);
+  // Convert when the order unit differs but is compatible ("500 ml" vs catalog per "l",
+  // "3 piece" vs catalog per "kg" when piece weight is known)
+  const qtyInItemUnits = unitAgnostic ? qty : convertQty(qty, order.unit, item.unit, item.pieceWeight);
   if (qtyInItemUnits == null) return order;
   const priced = { ...order };
-  if (priced.totalAmount == null) priced.totalAmount = round2(item.sellPrice * qtyInItemUnits);
-  if (priced.costPrice == null && item.costPrice != null) priced.costPrice = round2(item.costPrice * qtyInItemUnits);
+  // Track exactly which fields the catalog filled, so a later catalog fix
+  // re-prices those - but never prices the customer's message stated itself.
+  const filledTotal = priced.totalAmount == null;
+  const filledCost = priced.costPrice == null && item.costPrice != null;
+  if (filledTotal) priced.totalAmount = round2(item.sellPrice * qtyInItemUnits);
+  if (filledCost) priced.costPrice = round2(item.costPrice * qtyInItemUnits);
   if (priced.costPrice != null && priced.totalAmount != null) {
     priced.profitAmount = round2(priced.totalAmount - priced.costPrice);
     priced.profitPercent = priced.costPrice > 0 ? round2((priced.profitAmount / priced.costPrice) * 100) : null;
   }
-  priced.pricedBy = 'catalog';
+  if (filledTotal || filledCost) {
+    priced.pricedBy = 'catalog';
+    if (filledTotal) priced.pricedTotalBy = 'catalog';
+    if (filledCost) priced.pricedCostBy = 'catalog';
+  }
   return priced;
 }
 
@@ -551,8 +623,10 @@ function loadContacts() {
   } catch {}
 }
 loadContacts();
+/** WhatsApp reports masked phones ("+91………39") as chat/profile display names - never treat those as names. */
+function isMaskedName(name) { return /[•…]/.test(String(name || '')); }
 function rememberContact(c) {
-  if (!c || !c.id || !c.name) return;
+  if (!c || !c.id || !c.name || isMaskedName(c.name)) return;
   contactNames.set(c.id, c.name);
   if (c.lid) contactNames.set(c.lid, c.name);
   saveContacts();
@@ -560,6 +634,7 @@ function rememberContact(c) {
 }
 function rememberLidMapping(m) {
   if (!m || !m.lid || !m.pn) return;
+  if (lidToPn.get(m.lid) === m.pn) return; // already known - skip the disk write
   lidToPn.set(m.lid, m.pn);
   const name = contactNames.get(m.lid) || contactNames.get(m.pn);
   if (name) { contactNames.set(m.lid, name); contactNames.set(m.pn, name); }
@@ -570,7 +645,8 @@ function rememberLidMapping(m) {
 /** Saved address-book name for a jid (LID or phone), or null. */
 function savedNameFor(jid) {
   const pn = lidToPn.get(jid);
-  return contactNames.get(jid) || (pn && contactNames.get(pn)) || null;
+  const name = contactNames.get(jid) || (pn && contactNames.get(pn)) || null;
+  return name && !isMaskedName(name) ? name : null;
 }
 
 // Orders recorded before a contact name was known get backfilled once it arrives
@@ -595,13 +671,17 @@ function scheduleNameBackfill(orderId, jid) {
   for (const delay of [5000, 20000, 60000]) setTimeout(flushPendingNames, delay);
 }
 
-/** Resolve sender: saved contact name (via jid or linked phone jid) -> pushName -> +number. */
-async function resolveSenderName(jid, pushName) {
-  const pn = lidToPn.get(jid);
-  const saved = contactNames.get(jid) || (pn && contactNames.get(pn)) || null;
+/**
+ * Sender display: saved contact name -> real phone number. Never the WhatsApp
+ * profile/display name (it's often a masked "+91………39" or a random nickname).
+ */
+function resolveSenderName(jid, pushName) {
+  void pushName; // intentionally unused - display names are not shown
+  const saved = savedNameFor(jid);
   if (saved) return saved;
-  if (pushName) return pushName;
+  const pn = lidToPn.get(jid);
   const digits = String(jid).split('@')[0].replace(/\D/g, '');
+  if (!digits && pn) return String(pn).split('@')[0];
   return digits ? '+' + digits : jid;
 }
 let botStatus = {
@@ -782,7 +862,20 @@ async function startBot() {
       const linkCount = (text.match(/https?:\/\//gi) || []).length;
       if (linkCount >= 1 && text.replace(/https?:\/\/\S+/gi, '').trim().length < 20) return;
 
-      const senderName = await resolveSenderName(senderJid, msg.pushName);
+      // Every message carries the sender's other jid (phone <-> LID) in
+      // participantAlt / remoteJidAlt - learn the mapping so saved contact
+      // names resolve correctly even though messages arrive as LIDs.
+      const senderAlt = msg.key.participantAlt || msg.key.remoteJidAlt;
+      if (senderAlt) {
+        const altIsLid = senderAlt.endsWith('@lid');
+        const lid = altIsLid ? senderAlt : senderJid;
+        const pn = altIsLid ? senderJid : senderAlt;
+        if (lid.endsWith('@lid') && pn.endsWith('@s.whatsapp.net')) {
+          rememberLidMapping({ lid, pn });
+        }
+      }
+
+      const senderName = resolveSenderName(senderJid, msg.pushName);
 
       const order = await parseOrder(text);
       if (!order) return;
@@ -817,7 +910,7 @@ function jidNormalizedUser(sock) {
 }
 
 /** Vendor fills prices for a pending item -> save to catalog, re-price open orders. */
-function resolvePendingItem(pendingId, sellPrice, costPrice, unit) {
+function resolvePendingItem(pendingId, sellPrice, costPrice, unit, pieceWeight) {
   const list = loadPending();
   const p = list.find((x) => x.id === pendingId);
   if (!p) return null;
@@ -833,36 +926,14 @@ function resolvePendingItem(pendingId, sellPrice, costPrice, unit) {
   entry.sellPrice = sellPrice;
   entry.costPrice = costPrice;
   if (unit) entry.unit = unit;
+  const pw = Number(pieceWeight);
+  if (Number.isFinite(pw) && pw > 0) entry.pieceWeight = pw;
   if (!existing) items.unshift(entry);
   saveCatalog(items);
   savePending(list.filter((x) => x.id !== pendingId));
 
   // Re-price older orders of the same item (incl. synonyms: "tel", "mustard tel"...)
-  const pTerms = nameTerms(p.item);
-  const orders = loadOrders();
-  let updated = 0;
-  for (const o of orders) {
-    if (!o.item) continue;
-    const oTerms = nameTerms(o.item);
-    const sameItem = oTerms.size > 0 && pTerms.size > 0
-      ? [...pTerms].some((t) => oTerms.has(t))
-      : o.item.toLowerCase() === p.item.toLowerCase();
-    if (!sameItem) continue;
-    if (o.totalAmount != null && o.costPrice != null) continue;
-    if (o.quantity == null) continue;
-    const qtyIn = o.unit && entry.unit && o.unit !== entry.unit
-      ? convertQty(o.quantity, o.unit, entry.unit)
-      : o.quantity;
-    if (qtyIn == null) continue; // incompatible units (kg vs l), skip
-    if (o.totalAmount == null) o.totalAmount = round2(entry.sellPrice * qtyIn);
-    if (o.costPrice == null && entry.costPrice != null) o.costPrice = round2(entry.costPrice * qtyIn);
-    if (o.costPrice != null && o.totalAmount != null) {
-      o.profitAmount = round2(o.totalAmount - o.costPrice);
-      o.profitPercent = o.costPrice > 0 ? round2((o.profitAmount / o.costPrice) * 100) : null;
-    }
-    updated++;
-  }
-  if (updated) saveOrders(orders);
+  const updated = repriceOrdersForItem(entry);
   return { entry, updated };
 }
 
@@ -945,9 +1016,15 @@ app.post('/api/catalog', auth, (req, res) => {
   if (req.body?.unit != null) entry.unit = req.body.unit || null;
   if (req.body?.sellPrice != null) entry.sellPrice = Number(req.body.sellPrice) || null;
   if (req.body?.costPrice != null) entry.costPrice = Number(req.body.costPrice) || null;
+  if (req.body?.pieceWeight != null) {
+    const pw = Number(req.body.pieceWeight);
+    entry.pieceWeight = Number.isFinite(pw) && pw > 0 ? pw : null;
+  }
   if (!existing) items.unshift(entry);
   saveCatalog(items);
-  res.json(entry);
+  // Prices changed on an existing item -> fix orders the old price had miscalculated
+  const repriced = existing ? repriceOrdersForItem(entry) : 0;
+  res.json({ ...entry, repricedOrders: repriced });
 });
 app.delete('/api/catalog/:id', auth, (req, res) => {
   const items = loadCatalog();
@@ -962,10 +1039,11 @@ app.post('/api/pending-pricing/:id/resolve', auth, (req, res) => {
   const sellPrice = Number(req.body?.sellPrice);
   const costPrice = req.body?.costPrice != null ? Number(req.body.costPrice) : null;
   const unit = req.body?.unit != null ? String(req.body.unit) : null;
+  const pieceWeight = req.body?.pieceWeight != null ? Number(req.body.pieceWeight) : null;
   if (!Number.isFinite(sellPrice) || sellPrice <= 0) {
     return res.status(400).json({ error: 'sellPrice (number > 0) required' });
   }
-  const result = resolvePendingItem(req.params.id, sellPrice, costPrice, unit);
+  const result = resolvePendingItem(req.params.id, sellPrice, costPrice, unit, pieceWeight);
   if (!result) return res.status(404).json({ error: 'pending item not found' });
   res.json(result);
 });
