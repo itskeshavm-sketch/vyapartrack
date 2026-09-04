@@ -148,6 +148,16 @@ function findCatalogItem(name) {
 function loadPending() { return loadJson(PENDING_FILE, []); }
 function savePending(list) { saveJson(PENDING_FILE, list); }
 
+/** Convert a quantity between compatible units (kg<->g, l<->ml, dozen<->pcs). */
+const UNIT_DIMENSION = { kg: 'mass', g: 'mass', ml: 'volume', l: 'volume', pcs: 'count', dozen: 'count' };
+const UNIT_TO_BASE = { kg: 1000, g: 1, ml: 1, l: 1000, pcs: 1, dozen: 12 };
+function convertQty(qty, fromUnit, toUnit) {
+  if (qty == null) return null;
+  if (!fromUnit || !toUnit || fromUnit === toUnit) return qty;
+  if (UNIT_DIMENSION[fromUnit] !== UNIT_DIMENSION[toUnit]) return null;
+  return round2(qty * (UNIT_TO_BASE[fromUnit] / UNIT_TO_BASE[toUnit]));
+}
+
 /** Fill in sell/cost from the catalog when the message didn't state prices. */
 function applyCatalogPricing(order) {
   if (!order || !order.item || order.quantity == null) return order;
@@ -156,10 +166,12 @@ function applyCatalogPricing(order) {
   const qty = order.quantity;
   const knownUnit = order.unit && item.unit && order.unit === item.unit;
   const unitAgnostic = !order.unit || !item.unit || knownUnit;
-  if (!unitAgnostic) return order;
+  // Convert when the order unit differs but is compatible ("500 ml" vs catalog per "l")
+  const qtyInItemUnits = unitAgnostic ? qty : convertQty(qty, order.unit, item.unit);
+  if (qtyInItemUnits == null) return order;
   const priced = { ...order };
-  if (priced.totalAmount == null) priced.totalAmount = round2(item.sellPrice * qty);
-  if (priced.costPrice == null && item.costPrice != null) priced.costPrice = round2(item.costPrice * qty);
+  if (priced.totalAmount == null) priced.totalAmount = round2(item.sellPrice * qtyInItemUnits);
+  if (priced.costPrice == null && item.costPrice != null) priced.costPrice = round2(item.costPrice * qtyInItemUnits);
   if (priced.costPrice != null && priced.totalAmount != null) {
     priced.profitAmount = round2(priced.totalAmount - priced.costPrice);
     priced.profitPercent = priced.costPrice > 0 ? round2((priced.profitAmount / priced.costPrice) * 100) : null;
@@ -755,9 +767,12 @@ function resolvePendingItem(pendingId, sellPrice, costPrice, unit) {
     if (!sameItem) continue;
     if (o.totalAmount != null && o.costPrice != null) continue;
     if (o.quantity == null) continue;
-    if (o.unit && entry.unit && o.unit !== entry.unit) continue;
-    if (o.totalAmount == null) o.totalAmount = round2(entry.sellPrice * o.quantity);
-    if (o.costPrice == null && entry.costPrice != null) o.costPrice = round2(entry.costPrice * o.quantity);
+    const qtyIn = o.unit && entry.unit && o.unit !== entry.unit
+      ? convertQty(o.quantity, o.unit, entry.unit)
+      : o.quantity;
+    if (qtyIn == null) continue; // incompatible units (kg vs l), skip
+    if (o.totalAmount == null) o.totalAmount = round2(entry.sellPrice * qtyIn);
+    if (o.costPrice == null && entry.costPrice != null) o.costPrice = round2(entry.costPrice * qtyIn);
     if (o.costPrice != null && o.totalAmount != null) {
       o.profitAmount = round2(o.totalAmount - o.costPrice);
       o.profitPercent = o.costPrice > 0 ? round2((o.profitAmount / o.costPrice) * 100) : null;
