@@ -96,13 +96,54 @@ function saveJson(file, data) {
 }
 function loadCatalog() { return loadJson(CATALOG_FILE, []); }
 function saveCatalog(items) { saveJson(CATALOG_FILE, items); }
+
+// Everyday Hindi/regional trade names <-> English, so an item saved as "Oil"
+// also matches orders that say "tel", "doodh" matches "milk", etc.
+const ITEM_SYNONYMS = [
+  ['oil', 'tel', 'thel', 'tail'],
+  ['milk', 'doodh', 'dudh', 'pal', 'paal'],
+  ['sugar', 'cheeni', 'chini', 'sakkar', 'shakkar'],
+  ['flour', 'atta', 'aata', 'maida', 'besan'],
+  ['rice', 'chawal', 'chaval', 'bhaat'],
+  ['ghee', 'ghii'],
+  ['dal', 'daal', 'pulse', 'lentils'],
+  ['salt', 'namak', 'lun'],
+  ['honey', 'shahad', 'shehad', 'madhu'],
+  ['butter', 'makkhan', 'makhan'],
+  ['curd', 'dahi', 'yogurt'],
+  ['tea', 'chai'],
+  ['coffee', 'kaapi'],
+  ['spice', 'masala'],
+  ['wheat', 'gehu', 'gahu'],
+  ['jaggery', 'gud', 'gur'],
+];
+function nameTerms(name) {
+  const n = String(name || '').toLowerCase().trim();
+  const terms = new Set(n ? [n] : []);
+  for (const group of ITEM_SYNONYMS) {
+    if (group.includes(n)) group.forEach((g) => terms.add(g));
+  }
+  return terms;
+}
 function findCatalogItem(name) {
   const n = String(name || '').toLowerCase().trim();
   if (!n) return null;
   const items = loadCatalog();
-  return items.find((it) => it.name.toLowerCase() === n)
-    || items.find((it) => n.includes(it.name.toLowerCase()) || it.name.toLowerCase().includes(n))
-    || null;
+  // exact: catalog name equals the order item, or is a known synonym of it
+  const exact = items.find((it) => {
+    const in2 = String(it.name || '').toLowerCase().trim();
+    return in2 && (in2 === n || nameTerms(in2).has(n));
+  });
+  if (exact) return exact;
+  // substring: any synonym of either name contained in the other ("mustard tel" vs "oil")
+  const terms = nameTerms(n);
+  return items.find((it) => {
+    const in2 = String(it.name || '').toLowerCase().trim();
+    if (!in2) return false;
+    for (const t of terms) if (t.length >= 3 && in2.includes(t)) return true;
+    for (const t of nameTerms(in2)) if (t.length >= 3 && n.includes(t)) return true;
+    return false;
+  }) || null;
 }
 function loadPending() { return loadJson(PENDING_FILE, []); }
 function savePending(list) { saveJson(PENDING_FILE, list); }
@@ -164,7 +205,7 @@ function pricingQuestionText(p) {
 // ============ Poolside AI parser ============
 const SYSTEM_PROMPT = `You are an order-extraction engine for small Indian businesses.
 Extract a JSON object from the message with EXACTLY these fields:
-{"customer": string|null, "item": string|null, "quantity": number|null, "unit": "kg"|"g"|"pcs"|"dozen"|"l"|null, "costPrice": number|null, "profitPercent": number|null, "profitAmount": number|null, "totalAmount": number|null}
+{"customer": string|null, "item": string|null, "quantity": number|null, "unit": "kg"|"g"|"ml"|"l"|"pcs"|"dozen"|null, "costPrice": number|null, "profitPercent": number|null, "profitAmount": number|null, "totalAmount": number|null}
 Rules:
 - costPrice = what the shopkeeper paid (cost / CP / base price).
 - A message can be a valid order with only customer/item/quantity (price discussed later) - extract what is present, leave the rest null.
@@ -221,7 +262,7 @@ async function parseWithAI(text) {
 }
 
 // ============ Regex parser (offline fallback) ============
-const UNITS = 'kg|kgs|kilogram|kilograms|kilo|kilos|keji|gram|grams|graam|gms|gm|g|dozen|darjan|pcs|pieces|piece|pees|pis|nag|litre|litres|liter|liters|l|ser|seer|sher|pav|paav|poa|tola|thola|tol|ratti|chatak|chhatank|masha|vori|ennam|ennikkai|mukka|item|ta';
+const UNITS = 'kg|kgs|kilogram|kilograms|kilo|kilos|keji|gram|grams|graam|gms|gm|g|dozen|darjan|pcs|pieces|piece|pees|pis|nag|ml|millilitre|millilitres|milliliter|milliliters|litre|litres|liter|liters|l|ser|seer|sher|pav|paav|poa|tola|thola|tol|ratti|chatak|chhatank|masha|vori|ennam|ennikkai|mukka|item|ta';
 
 const QUANTITY_RE = new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${UNITS})\\b`, 'i');
 const UNIT_NOT_AFTER = new RegExp(`(?!\\s*(?:${UNITS})\\b)`, 'i');
@@ -296,6 +337,7 @@ const NATIVE_UNITS = [
   'తులం', 'తులా', 'ತೊಲ', 'ತೊಲೆ', 'ರತ್ತಿ', 'തൊല', 'രത്തി', 'તોલા', 'તોલ', 'રતી',
   'ਤੋਲਾ', 'ਤੋਲ', 'ਰੱਤੀ', 'تولہ', 'تول', 'رتی', 'ماشہ',
   'लिटर', 'লিটার', 'லிட்டர்', 'లీటర్', 'ಲೀಟರ್', 'ലിറ്റർ', 'લીટર', 'ਲੀਟਰ', 'لیٹر',
+  'मिलीलीटर', 'मिली',
   'पीस', 'नग', 'পিস', 'টা', 'பீஸ்', 'పీస్', 'ముక్క', 'ಪೀಸ್', 'ಐಟಂ', 'എണ്ണം', 'પીસ', 'નંગ', 'ਪੀਸ', 'ਨਗ', 'پیس', 'عدد',
   'दर्जन', 'डझन', 'ডজন', 'டஜன்', 'డజన్', 'ಡಜನ್', 'ഡസൻ', 'ડઝન', 'ਦਰਜਨ', 'درجن',
   'కిలోలు', 'కిలోల', 'గ్రాములు', 'గ్రాముల', 'లీటర్లు', 'డజన్లు',
@@ -307,6 +349,7 @@ const NATIVE_UNIT_MAP = (() => {
     ['किलो केजी किलोग्राम किलोग्रॅম কিলো কেজি কিলোগ্রাম கிலோ கிலோகிராம் కిలో కిలోగ్రామ్ కేజీ ಕಿಲೋ ಕಿಲೋಗ್ರಾಂ ಕೆಜಿ കിലോ കിലോഗ്രാം કિલો કિલોગ્રામ ਕਿਲੋ ਕਿਲੋਗ੍ਰਾਮ ਕੇਜੀ کلو کلوگرام', 'kg'],
     ['ग्राम ग्रॅम গ্রাম கிராம் గ్రాము ಗ್ರಾಂ ಗ್ರಾಮ ഗ്രാം ગ્રામ ਗ੍ਰਾਮ گرام तोला तोळा तोळ रत्ती छटांक ভরি তোলা தோலா தோலை తులం తులా ತೊಲ ತೊಲೆ ರತ್ತಿ തൊല രത്തિ તોલા તોલ રતી ਤੋਲਾ ਤੋਲ ਰੱਤੀ تولہ تول رتی ماشہ', 'g'],
     ['लीटर লিটার லிட்டர் లీటర్ ಲೀಟರ್ ലിറ്റർ લીટર ਲੀટર لیٹر', 'l'],
+  ['मिलीलीटर मिली', 'ml'],
     ['पीस नग পিস টা பீஸ் పీస్ ముక్క ಪೀಸ್ ಐಟಂ എണ്ണം પીસ નંગ ਪੀਸ ਨਗ پیس عدد', 'pcs'],
     ['दर्जन डझन ডজন டஜன் డజನ್ ಡಜನ್ ഡസൻ ડઝન ਦર்ஜન درجن', 'dozen'],
     ['కిలోలు కిలోల గ్రాములు గ్రాముల లీటర్లు డజన్లు', 'dozen'],
@@ -347,6 +390,7 @@ const UNIT_NORMALIZE = {
   pcs: 'pcs', pieces: 'pcs', piece: 'pcs', pees: 'pcs', pis: 'pcs', nag: 'pcs',
   ennam: 'pcs', ennikkai: 'pcs', mukka: 'pcs', item: 'pcs', ta: 'pcs',
   litre: 'l', litres: 'l', liter: 'l', liters: 'l', l: 'l',
+  ml: 'ml', millilitre: 'ml', millilitres: 'ml', milliliter: 'ml', milliliters: 'ml',
   ser: 'kg', seer: 'kg', sher: 'kg', pav: 'kg', paav: 'kg', poa: 'kg',
   tola: 'g', thola: 'g', tol: 'g', ratti: 'g', chatak: 'g', chhatank: 'g', masha: 'g', vori: 'g',
 };
@@ -683,7 +727,9 @@ function resolvePendingItem(pendingId, sellPrice, costPrice, unit) {
   const p = list.find((x) => x.id === pendingId);
   if (!p) return null;
   const items = loadCatalog();
-  const existing = items.find((it) => it.name.toLowerCase() === p.item.toLowerCase());
+  // Merge into an existing catalog entry (incl. synonym match, e.g. "tel" -> "Oil")
+  const matched = findCatalogItem(p.item);
+  const existing = matched ? items.find((it) => it.id === matched.id) : null;
   const entry = existing || {
     id: crypto.randomUUID(),
     name: p.item,
@@ -696,11 +742,17 @@ function resolvePendingItem(pendingId, sellPrice, costPrice, unit) {
   saveCatalog(items);
   savePending(list.filter((x) => x.id !== pendingId));
 
-  // Re-price older orders of the same item that were left without totals
+  // Re-price older orders of the same item (incl. synonyms: "tel", "mustard tel"...)
+  const pTerms = nameTerms(p.item);
   const orders = loadOrders();
   let updated = 0;
   for (const o of orders) {
-    if (!o.item || o.item.toLowerCase() !== p.item.toLowerCase()) continue;
+    if (!o.item) continue;
+    const oTerms = nameTerms(o.item);
+    const sameItem = oTerms.size > 0 && pTerms.size > 0
+      ? [...pTerms].some((t) => oTerms.has(t))
+      : o.item.toLowerCase() === p.item.toLowerCase();
+    if (!sameItem) continue;
     if (o.totalAmount != null && o.costPrice != null) continue;
     if (o.quantity == null) continue;
     if (o.unit && entry.unit && o.unit !== entry.unit) continue;
@@ -777,7 +829,9 @@ app.post('/api/catalog', auth, (req, res) => {
   const name = String(req.body?.name || '').trim();
   if (!name) return res.status(400).json({ error: 'name required' });
   const items = loadCatalog();
-  const existing = items.find((it) => it.name.toLowerCase() === name.toLowerCase());
+  // Reuse an existing entry when it's the same thing (e.g. "tel" vs "Oil")
+  const matched = findCatalogItem(name);
+  const existing = matched ? items.find((it) => it.id === matched.id) : null;
   const entry = existing || { id: crypto.randomUUID(), name };
   if (req.body?.unit != null) entry.unit = req.body.unit || null;
   if (req.body?.sellPrice != null) entry.sellPrice = Number(req.body.sellPrice) || null;

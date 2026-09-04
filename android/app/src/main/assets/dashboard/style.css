@@ -222,8 +222,8 @@ input, select { font-family: inherit; outline: none; }
   border-radius: 15px;
 }
 .order-main { flex: 1; min-width: 0; }
-.order-cust { font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.order-item { font-size: 13px; color: #c8d4cc; margin-top: 1px; }
+.order-cust { font-weight: 800; font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.order-item { font-size: 15px; font-weight: 700; color: #e9e3d4; margin-top: 2px; }
 .order-src { font-size: 11px; color: #7d8f84; margin-top: 3px; }
 .order-amt { font-weight: 800; font-family: 'Inter', sans-serif; font-size: 15px; color: #f5c66b; white-space: nowrap; }
 .order-actions { display: flex; gap: 4px; }

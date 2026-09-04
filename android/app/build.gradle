@@ -11,8 +11,8 @@ android {
         applicationId 'com.vyapartrack.app'
         minSdk 24
         targetSdk 34
-        versionCode 260
-        versionName '2.6.0'
+        versionCode 261
+        versionName '2.6.1'
     }
 
     buildTypes {

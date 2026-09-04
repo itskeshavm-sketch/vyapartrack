@@ -9,7 +9,7 @@ const MODEL = process.env.POOLSIDE_MODEL || 'poolside/laguna-xs-2.1';
 
 const SYSTEM_PROMPT = `You are an order-extraction engine for small Indian businesses.
 Extract a JSON object from the message with EXACTLY these fields:
-{"customer": string|null, "item": string|null, "quantity": number|null, "unit": "kg"|"g"|"pcs"|"dozen"|"l"|null, "costPrice": number|null, "profitPercent": number|null, "profitAmount": number|null, "totalAmount": number|null}
+{"customer": string|null, "item": string|null, "quantity": number|null, "unit": "kg"|"g"|"ml"|"l"|"pcs"|"dozen"|null, "costPrice": number|null, "profitPercent": number|null, "profitAmount": number|null, "totalAmount": number|null}
 Rules:
 - costPrice = what the shopkeeper paid (cost / CP / base price).
 - A message can be a valid order with only customer/item/quantity (price discussed later) - extract what is present, leave the rest null.
