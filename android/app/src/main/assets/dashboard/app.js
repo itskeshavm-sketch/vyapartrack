@@ -93,15 +93,55 @@ function showOnboarding() {
 function showDashboard() {
   $('onboarding').classList.add('hidden');
   $('dashboard').classList.remove('hidden');
+  stopCodeCountdown();
   startPolling();
 }
-function showObStep2(code) {
+function showObStep2(code, expiresIn) {
   $('ob-step-1').classList.add('hidden');
   $('ob-step-2').classList.remove('hidden');
+  currentObCode = code;
   $('obCode').textContent = formatCode(code);
-  $('obStatus').textContent = 'Waiting for WhatsApp to connect…';
+  setObStatus('Waiting for WhatsApp to connect…');
+  startCodeCountdown(expiresIn != null ? expiresIn : 100);
 }
 function formatCode(c) { return (c || '').match(/.{1,4}/g)?.join(' ') || c; }
+
+// WhatsApp expires pairing codes in ~2-3 min. The server re-mints them
+// automatically; here we show the countdown and pick up the new code.
+let obCountdownTimer = null;
+let currentObCode = null;
+const fmtClock = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+function setObStatus(text, secsLeft) {
+  $('obStatus').textContent = secsLeft != null ? `${text} · कोड ${fmtClock(secsLeft)} में नया होगा` : text;
+}
+function startCodeCountdown(secs) {
+  stopCodeCountdown();
+  let left = Math.max(0, Math.floor(secs));
+  setObStatus('Waiting for WhatsApp to connect…', left);
+  obCountdownTimer = setInterval(() => {
+    left -= 1;
+    if (left <= 0) {
+      stopCodeCountdown();
+      setObStatus('कोड रिन्यू हो रहा है…'); // new code arrives via /api/status sync
+    } else {
+      setObStatus('Waiting for WhatsApp to connect…', left);
+    }
+  }, 1000);
+}
+function stopCodeCountdown() {
+  if (obCountdownTimer) { clearInterval(obCountdownTimer); obCountdownTimer = null; }
+}
+/** Onboarding is visible: reflect the freshest server-side code (auto-rotated). */
+function syncPairingCode(status) {
+  if (!status.pairingCode || status.pairingCode === currentObCode) return;
+  const onStep2 = !$('ob-step-2').classList.contains('hidden');
+  currentObCode = status.pairingCode;
+  $('obCode').textContent = formatCode(status.pairingCode);
+  const expiresIn = status.pairingExpiresAt
+    ? Math.max(0, Math.round((new Date(status.pairingExpiresAt).getTime() - Date.now()) / 1000))
+    : 100;
+  if (onStep2) startCodeCountdown(expiresIn);
+}
 
 $('obGetCodeBtn').addEventListener('click', async () => {
   const phone = $('obPhone').value.replace(/\D/g, '');
@@ -109,12 +149,12 @@ $('obGetCodeBtn').addEventListener('click', async () => {
   $('obGetCodeBtn').disabled = true;
   $('obError').textContent = '';
   try {
-    const { code } = await serverFetch('/api/pair', {
+    const { code, expiresIn } = await serverFetch('/api/pair', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ phone }),
     });
-    showObStep2(code);
+    showObStep2(code, expiresIn);
   } catch (err) {
     $('obError').textContent = '⚠ ' + err.message;
   } finally {
@@ -190,8 +230,11 @@ async function pollOnce() {
     ]);
     serverOk = true;
     botConnected = status.connected;
+    // Onboarding screens must always show the freshest (auto-rotated) pairing code
+    if (!$('onboarding').classList.contains('hidden')) syncPairingCode(status);
     if (status.connected) {
       setConnStatus('WhatsApp जुड़ा ✓', true);
+      stopCodeCountdown();
       if (!$('onboarding').classList.contains('hidden')) showDashboard();
     }
     else if (status.connecting) setConnStatus('WhatsApp जुड़ रहा है…', false);

@@ -609,9 +609,88 @@ let botStatus = {
   connecting: false,
   qrDataUrl: null,
   pairingCode: null,
+  pairingExpiresAt: null,
   lastError: null,
   startedAt: null,
 };
+
+// Pairing codes die ~2-3 minutes after issuance on WhatsApp's side. We treat
+// them as valid for 100s, reuse a still-fresh code for the same number, and
+// regenerate automatically (keeper below) so the on-screen code never goes stale.
+const PAIRING_CODE_TTL_MS = 100000;
+let pairingPhone = null;
+let pairingCodeAt = 0;
+let pairingKeeperRunning = false;
+let pairingInflight = null;
+
+function notePairingCode(code, phone) {
+  pairingPhone = phone;
+  pairingCodeAt = Date.now();
+  botStatus.pairingCode = code;
+  botStatus.pairingExpiresAt = new Date(pairingCodeAt + PAIRING_CODE_TTL_MS).toISOString();
+}
+
+/** Wait for the WhatsApp socket to open, then request the code. Retries through reconnects. */
+async function requestCodeWithRetry(phone) {
+  const deadline = Date.now() + 45000;
+  let lastErr = new Error('WhatsApp connection is not ready yet');
+  while (Date.now() < deadline) {
+    if (!sock) throw new Error('Bot not started yet');
+    if (sock.ws?.isOpen) {
+      try {
+        return await sock.requestPairingCode(phone);
+      } catch (err) {
+        lastErr = err; // socket died mid-request - wait for the auto-reconnect and try again
+      }
+    }
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+  throw lastErr;
+}
+
+async function requestPairingCode(phoneRaw) {
+  if (!sock) throw new Error('Bot not started yet');
+  let phone = String(phoneRaw).replace(/\D/g, '');
+  if (phone.length === 10) phone = '91' + phone; // assume Indian number
+  if (phone.length < 11) throw new Error('Invalid phone number');
+
+  // Same number + code still fresh + socket alive -> hand back the existing code
+  const fresh = botStatus.pairingCode && pairingPhone === phone
+    && Date.now() - pairingCodeAt < PAIRING_CODE_TTL_MS;
+  if (fresh && sock.ws?.isOpen) return botStatus.pairingCode;
+
+  // Double-tap dedup: don't mint two codes for the same request
+  if (pairingInflight && pairingInflight.phone === phone) return pairingInflight.promise;
+
+  const promise = (async () => {
+    const code = await requestCodeWithRetry(phone);
+    notePairingCode(code, phone);
+    return code;
+  })();
+  pairingInflight = { phone, promise };
+  try {
+    return await promise;
+  } finally {
+    if (pairingInflight?.promise === promise) pairingInflight = null;
+  }
+}
+
+/** Keep a live pairing code on screen: re-mint it whenever it expires while unlinked. */
+function startPairingKeeper() {
+  setInterval(async () => {
+    if (pairingKeeperRunning) return;
+    if (botStatus.connected || !pairingPhone) return;
+    if (botStatus.pairingCode && Date.now() - pairingCodeAt < PAIRING_CODE_TTL_MS) return;
+    if (!sock || !sock.ws?.isOpen) return;
+    pairingKeeperRunning = true;
+    try {
+      const code = await sock.requestPairingCode(pairingPhone);
+      notePairingCode(code, pairingPhone);
+      console.log('[bot] pairing code refreshed automatically');
+    } catch { /* keeper retries on the next tick */ }
+    finally { pairingKeeperRunning = false; }
+  }, 10000);
+}
 
 async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
@@ -656,7 +735,8 @@ async function startBot() {
     }
     if (connection === 'connecting') botStatus.connecting = true;
     if (connection === 'open') {
-      botStatus = { ...botStatus, connected: true, connecting: false, qrDataUrl: null, pairingCode: null, lastError: null };
+      botStatus = { ...botStatus, connected: true, connecting: false, qrDataUrl: null, pairingCode: null, pairingExpiresAt: null, lastError: null };
+      pairingPhone = null;
       console.log('[bot] WhatsApp connected');
     }
     if (connection === 'close') {
@@ -664,9 +744,22 @@ async function startBot() {
       const loggedOut = code === DisconnectReason.loggedOut;
       botStatus.connected = false;
       botStatus.connecting = false;
-      botStatus.lastError = loggedOut ? 'Logged out - link again' : 'Connection lost - reconnecting...';
-      console.warn('[bot] closed:', code, loggedOut ? '(logged out)' : '');
-      if (!loggedOut) setTimeout(() => startBot().catch((e) => console.error(e)), 5000);
+      // A dead/expired pairing session surfaces as 401 loggedOut. The old auth
+      // files are useless then - keeping them makes every retry fail with
+      // "Connection Closed" - so wipe them and start a fresh linkable socket.
+      botStatus.lastError = loggedOut ? 'Previous link expired - get a new code' : 'Connection lost - reconnecting...';
+      botStatus.pairingCode = null;
+      botStatus.pairingExpiresAt = null;
+      pairingCodeAt = 0;
+      console.warn('[bot] closed:', code, loggedOut ? '(logged out - resetting session)' : '');
+      if (loggedOut) {
+        try {
+          fs.rmSync(AUTH_DIR, { recursive: true, force: true });
+          fs.mkdirSync(AUTH_DIR, { recursive: true });
+        } catch (e) { console.error('[bot] auth reset failed:', e.message); }
+      }
+      // Always come back up - logged-out or not, the vendor must be able to re-link.
+      setTimeout(() => startBot().catch((e) => console.error(e)), loggedOut ? 2000 : 5000);
     }
   });
 
@@ -715,16 +808,6 @@ async function startBot() {
       console.error('[bot] handler error:', err.message);
     }
   });
-}
-
-async function requestPairingCode(phoneRaw) {
-  if (!sock) throw new Error('Bot not started yet');
-  let phone = String(phoneRaw).replace(/\D/g, '');
-  if (phone.length === 10) phone = '91' + phone;
-  if (phone.length < 11) throw new Error('Invalid phone number');
-  const code = await sock.requestPairingCode(phone);
-  botStatus.pairingCode = code;
-  return code;
 }
 
 /** Vendor's own jid ("Message yourself") for price questions and notices. */
@@ -808,8 +891,19 @@ app.get('/api/status', auth, (req, res) =>
   res.json({ ...botStatus, aiConfigured: Boolean(POOLSIDE_API_KEY), aiModel: POOLSIDE_MODEL })
 );
 app.post('/api/pair', auth, async (req, res) => {
-  try { res.json({ code: await requestPairingCode(req.body?.phone) }); }
-  catch (err) { res.status(400).json({ error: err.message }); }
+  try {
+    const code = await requestPairingCode(req.body?.phone);
+    const expiresIn = botStatus.pairingExpiresAt
+      ? Math.max(0, Math.round((new Date(botStatus.pairingExpiresAt).getTime() - Date.now()) / 1000))
+      : null;
+    res.json({ code, expiresIn });
+  } catch (err) {
+    const raw = err.message || 'Pairing failed';
+    const msg = /Connection Closed|WebSocket|not ready/i.test(raw)
+      ? 'WhatsApp is reconnecting - tap again in a few seconds'
+      : raw;
+    res.status(400).json({ error: msg });
+  }
 });
 app.get('/api/orders', auth, (req, res) => res.json(loadOrders()));
 app.post('/api/orders', auth, async (req, res) => {
@@ -879,5 +973,6 @@ app.post('/api/pending-pricing/:id/resolve', auth, (req, res) => {
 app.listen(PORT, () => {
   console.log(`VyaparTrack server on :${PORT}`);
   console.log(`API token (save it!): ${API_TOKEN}`);
+  startPairingKeeper();
   startBot().catch((err) => console.error('[bot] failed to start:', err.message));
 });
