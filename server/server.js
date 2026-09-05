@@ -758,12 +758,13 @@ async function requestPairingCode(phoneRaw) {
   }
 }
 
-/** Mint a pairing code for the remembered number once the socket is back (after a restart) - never rotate mid-login. */
+/** Mint a pairing code for the remembered number once the socket is back (after a restart) - never rotate mid-login.
+ *  A code older than its TTL is dead on WhatsApp's side, so rotating it is safe. */
 function startPairingKeeper() {
   setInterval(async () => {
     if (pairingKeeperRunning) return;
     if (botStatus.connected || !pairingPhone) return;
-    if (botStatus.pairingCode) return; // a code is already on screen - leave it alone
+    if (botStatus.pairingCode && Date.now() - pairingCodeAt < PAIRING_CODE_TTL_MS) return; // live code on screen - leave it alone
     if (!sock || !sock.ws?.isOpen) return;
     pairingKeeperRunning = true;
     try {

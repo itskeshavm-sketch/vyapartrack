@@ -100,6 +100,7 @@ function showObStep2(code, expiresIn) {
   $('ob-step-1').classList.add('hidden');
   $('ob-step-2').classList.remove('hidden');
   currentObCode = code;
+  lastObPhone = ($('obPhone').value || '').replace(/\D/g, '');
   $('obCode').textContent = formatCode(code);
   setObStatus('Waiting for WhatsApp to connect…');
   startCodeCountdown(expiresIn != null ? expiresIn : 150);
@@ -110,6 +111,7 @@ function formatCode(c) { return (c || '').match(/.{1,4}/g)?.join(' ') || c; }
 // automatically; here we show the countdown and pick up the new code.
 let obCountdownTimer = null;
 let currentObCode = null;
+let lastObPhone = null;
 const fmtClock = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 function setObStatus(text, secsLeft) {
   $('obStatus').textContent = secsLeft != null ? `${text} · कोड ${fmtClock(secsLeft)} में नया होगा` : text;
@@ -125,7 +127,7 @@ function startCodeCountdown(secs) {
       // The code may have expired on WhatsApp's side. The server will NOT
       // rotate it on its own (rotating would break an in-progress login) -
       // the user must tap "कोड पाएं" again for a fresh one.
-      $('obStatus').textContent = 'कोड काम न करे तो "कोड पाएं" दबाकर नया कोड लें';
+      $('obStatus').textContent = 'कोड समाप्त - नीचे "नया कोड लें" दबाएँ';
     } else {
       setObStatus('Waiting for WhatsApp to connect…', left);
     }
@@ -173,6 +175,27 @@ $('obOpenWABtn').addEventListener('click', () => {
   // Try to open WhatsApp directly. If not installed, falls through to app store.
   try { window.Native.openWhatsApp?.(); } catch {}
   window.open('whatsapp://', '_blank');
+});
+
+// "नया कोड लें" - mint a fresh pairing code with the number from step 1.
+$('obNewCodeBtn').addEventListener('click', async () => {
+  const phone = lastObPhone || ($('obPhone') ? $('obPhone').value.replace(/\D/g, '') : '');
+  if (phone.length !== 10) { $('obStatus').textContent = 'पहले नंबर डालकर कोड लें'; return; }
+  stopCodeCountdown();
+  $('obStatus').textContent = 'नया कोड ले रहे हैं…';
+  try {
+    const { code, expiresIn } = await serverFetch('/api/pair', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone }),
+    });
+    currentObCode = code;
+    $('obCode').textContent = formatCode(code);
+    setObStatus('Waiting for WhatsApp to connect…', expiresIn != null ? expiresIn : 150);
+    startCodeCountdown(expiresIn != null ? expiresIn : 150);
+  } catch (err) {
+    $('obStatus').textContent = '⚠ ' + err.message;
+  }
 });
 
 // ============ Dashboard ============
