@@ -102,7 +102,7 @@ function showObStep2(code, expiresIn) {
   currentObCode = code;
   $('obCode').textContent = formatCode(code);
   setObStatus('Waiting for WhatsApp to connect…');
-  startCodeCountdown(expiresIn != null ? expiresIn : 100);
+  startCodeCountdown(expiresIn != null ? expiresIn : 150);
 }
 function formatCode(c) { return (c || '').match(/.{1,4}/g)?.join(' ') || c; }
 
@@ -122,7 +122,10 @@ function startCodeCountdown(secs) {
     left -= 1;
     if (left <= 0) {
       stopCodeCountdown();
-      setObStatus('कोड रिन्यू हो रहा है…'); // new code arrives via /api/status sync
+      // The code may have expired on WhatsApp's side. The server will NOT
+      // rotate it on its own (rotating would break an in-progress login) -
+      // the user must tap "कोड पाएं" again for a fresh one.
+      $('obStatus').textContent = 'कोड काम न करे तो "कोड पाएं" दबाकर नया कोड लें';
     } else {
       setObStatus('Waiting for WhatsApp to connect…', left);
     }
@@ -139,7 +142,7 @@ function syncPairingCode(status) {
   $('obCode').textContent = formatCode(status.pairingCode);
   const expiresIn = status.pairingExpiresAt
     ? Math.max(0, Math.round((new Date(status.pairingExpiresAt).getTime() - Date.now()) / 1000))
-    : 100;
+    : 150;
   if (onStep2) startCodeCountdown(expiresIn);
 }
 

@@ -69,10 +69,12 @@ let botStatus = {
   lastError: null,
 };
 
-// Pairing codes die ~2-3 minutes after issuance on WhatsApp's side. We treat
-// them as valid for 100s, reuse a still-fresh code for the same number, and
-// regenerate automatically (keeper below) so the on-screen code never goes stale.
-const PAIRING_CODE_TTL_MS = 100000;
+// WhatsApp kills the pairing session ~2-3 minutes after the code is issued.
+// NEVER rotate a code while it is on screen: minting a new one invalidates the
+// code the user is mid-way through typing. A fresh code is minted only when
+// the session actually died (401 -> restart) or the user taps "Get code" again.
+const PAIRING_CODE_TTL_MS = 150000; // rough validity estimate for the countdown
+const PAIRING_REUSE_MS = 60000;     // re-tap within a minute returns the same code
 let pairingPhone = null;
 let pairingCodeAt = 0;
 let pairingKeeperRunning = false;
@@ -104,20 +106,20 @@ async function requestCodeWithRetry(phone) {
   throw lastErr;
 }
 
-/** Keep a live pairing code on screen: re-mint it whenever it expires while unlinked. */
+/** Mint a pairing code for the remembered number once the socket is back (after a restart) - never rotate mid-login. */
 function startPairingKeeper() {
   if (pairingKeeperStarted) return;
   pairingKeeperStarted = true;
   setInterval(async () => {
     if (pairingKeeperRunning) return;
     if (botStatus.connected || !pairingPhone) return;
-    if (botStatus.pairingCode && Date.now() - pairingCodeAt < PAIRING_CODE_TTL_MS) return;
+    if (botStatus.pairingCode) return; // a code is already on screen - leave it alone
     if (!sock || !sock.ws?.isOpen) return;
     pairingKeeperRunning = true;
     try {
       const code = await sock.requestPairingCode(pairingPhone);
       notePairingCode(code, pairingPhone);
-      console.log('[bot] pairing code refreshed automatically');
+      console.log('[bot] pairing code re-issued automatically (fresh session)');
     } catch { /* keeper retries on the next tick */ }
     finally { pairingKeeperRunning = false; }
   }, 10000);
@@ -282,9 +284,10 @@ async function requestPairingCode(phoneRaw) {
   if (phone.length === 10) phone = '91' + phone; // assume Indian number
   if (phone.length < 11) throw new Error('Invalid phone number');
 
-  // Same number + code still fresh + socket alive -> hand back the existing code
+  // Same number + code minted <60s ago + socket alive -> hand back the same
+  // code (a re-tap must NOT invalidate a code the user may be entering)
   const fresh = botStatus.pairingCode && pairingPhone === phone
-    && Date.now() - pairingCodeAt < PAIRING_CODE_TTL_MS;
+    && Date.now() - pairingCodeAt < PAIRING_REUSE_MS;
   if (fresh && sock.ws?.isOpen) return botStatus.pairingCode;
 
   // Double-tap dedup: don't mint two codes for the same request
