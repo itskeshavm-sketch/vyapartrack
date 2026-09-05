@@ -691,8 +691,17 @@ let botStatus = {
   pairingCode: null,
   pairingExpiresAt: null,
   lastError: null,
+  lastDisconnectCode: null,
   startedAt: null,
 };
+
+// Backoff for reconnects: restarting every few seconds for hours is what gets
+// an IP/device throttled by WhatsApp in the first place.
+let reconnectAttempts = 0;
+function nextReconnectDelayMs() {
+  reconnectAttempts++;
+  return Math.min(60000, 5000 * Math.pow(2, reconnectAttempts - 1));
+}
 
 // WhatsApp kills the pairing session ~2-3 minutes after the code is issued.
 // NEVER rotate a code while it is on screen: minting a new one invalidates the
@@ -819,7 +828,8 @@ async function startBot() {
     }
     if (connection === 'connecting') botStatus.connecting = true;
     if (connection === 'open') {
-      botStatus = { ...botStatus, connected: true, connecting: false, qrDataUrl: null, pairingCode: null, pairingExpiresAt: null, lastError: null };
+      botStatus = { ...botStatus, connected: true, connecting: false, qrDataUrl: null, pairingCode: null, pairingExpiresAt: null, lastError: null, lastDisconnectCode: null };
+      reconnectAttempts = 0;
       pairingPhone = null;
       console.log('[bot] WhatsApp connected');
     }
@@ -828,6 +838,7 @@ async function startBot() {
       const loggedOut = code === DisconnectReason.loggedOut;
       botStatus.connected = false;
       botStatus.connecting = false;
+      botStatus.lastDisconnectCode = code ?? null;
       // A dead/expired pairing session surfaces as 401 loggedOut. The old auth
       // files are useless then - keeping them makes every retry fail with
       // "Connection Closed" - so wipe them and start a fresh linkable socket.
@@ -835,15 +846,18 @@ async function startBot() {
       botStatus.pairingCode = null;
       botStatus.pairingExpiresAt = null;
       pairingCodeAt = 0;
-      console.warn('[bot] closed:', code, loggedOut ? '(logged out - resetting session)' : '');
+      console.warn('[bot] closed:', code, lastDisconnect?.error?.message || '', loggedOut ? '(logged out - resetting session)' : '');
       if (loggedOut) {
         try {
           fs.rmSync(AUTH_DIR, { recursive: true, force: true });
           fs.mkdirSync(AUTH_DIR, { recursive: true });
         } catch (e) { console.error('[bot] auth reset failed:', e.message); }
       }
-      // Always come back up - logged-out or not, the vendor must be able to re-link.
-      setTimeout(() => startBot().catch((e) => console.error(e)), loggedOut ? 2000 : 5000);
+      // Back off so a crash-loop can't hammer WhatsApp (each restart also
+      // invalidates any outstanding pairing code).
+      const delay = nextReconnectDelayMs();
+      console.log(`[bot] reconnecting in ${Math.round(delay / 1000)}s (attempt ${reconnectAttempts})`);
+      setTimeout(() => startBot().catch((e) => console.error(e)), delay);
     }
   });
 
