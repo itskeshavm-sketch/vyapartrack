@@ -177,6 +177,13 @@ $('obOpenWABtn').addEventListener('click', () => {
   window.open('whatsapp://', '_blank');
 });
 
+// Step 2 -> Step 1: lets the user re-request a code with a different number
+// without having to force-close the app.
+$('obBackBtn').addEventListener('click', () => {
+  stopCodeCountdown();
+  showOnboarding();
+});
+
 // "नया कोड लें" - mint a fresh pairing code with the number from step 1.
 $('obNewCodeBtn').addEventListener('click', async () => {
   const phone = lastObPhone || ($('obPhone') ? $('obPhone').value.replace(/\D/g, '') : '');
