@@ -3,6 +3,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const crypto = require('crypto');
 const express = require('express');
 require('dotenv').config();
@@ -739,10 +740,24 @@ async function requestPairingCode(phoneRaw) {
 }
 
 async function startBot() {
-  // The SQLite store requires the parent directory to exist at open time.
-  fs.mkdirSync(path.dirname(STORE_PATH), { recursive: true });
+  // Pick a writable location for the SQLite session store: the configured
+  // path first, then the persistent data dir, then tmp. On Render the disk
+  // mount can lag or point elsewhere, so fall back instead of crash-looping.
+  const candidates = [STORE_PATH, path.join(DATA_DIR, 'zapo.db'), path.join(os.tmpdir(), 'vyapartrack-zapo.db')];
+  let storePath = null;
+  for (const candidate of candidates) {
+    try {
+      fs.mkdirSync(path.dirname(candidate), { recursive: true });
+      fs.accessSync(path.dirname(candidate), fs.constants.W_OK);
+      storePath = candidate;
+      break;
+    } catch { /* try the next candidate */ }
+  }
+  if (!storePath) throw new Error('No writable directory found for the WhatsApp session store');
+  if (storePath !== STORE_PATH) console.warn(`[bot] session store moved to ${storePath}`);
+
   const zapoStore = createStore({
-    backends: { sqlite: createSqliteStore({ path: STORE_PATH }) },
+    backends: { sqlite: createSqliteStore({ path: storePath }) },
     providers: {
       auth: 'sqlite', signal: 'sqlite', senderKey: 'sqlite', appState: 'sqlite',
       preKey: 'sqlite', session: 'sqlite', identity: 'sqlite',
