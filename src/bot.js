@@ -251,6 +251,12 @@ async function startBot(onOrderRecorded) {
     botStatus.connecting = false;
     botStatus.lastError = err?.message || String(err);
     console.error('[bot] connect failed:', err?.message || err);
+    // Render cold starts / transient network can time out the first handshake
+    // - retry with backoff instead of staying dead until manual restart.
+    reconnectAttempts = Math.min(reconnectAttempts + 1, 6);
+    const delay = Math.min(300000, 5000 * Math.pow(2, reconnectAttempts - 1));
+    console.warn(`[bot] retrying connect in ${Math.round(delay / 1000)}s (attempt ${reconnectAttempts})`);
+    setTimeout(() => startBot(onOrderRecorded).catch(() => {}), delay);
   });
 
   return client;
