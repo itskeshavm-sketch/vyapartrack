@@ -18,6 +18,9 @@
     "india"
   ],
   "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
   "dependencies": {
     "@whiskeysockets/baileys": "github:doryani-ai/Baileys#fix/companion-reg-refresh",
     "@zapo-js/store-sqlite": "^1.2.0",
