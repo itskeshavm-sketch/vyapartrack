@@ -9,7 +9,7 @@ services:
     healthCheckPath: /api/health
     envVars:
       - key: NODE_VERSION
-        value: 20.11.1
+        value: 22.11.0
       - key: POOLSIDE_API_KEY
         sync: false
       - key: POOLSIDE_MODEL

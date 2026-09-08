@@ -10,12 +10,74 @@ async function fetchJSON(url, opts) {
 }
 
 async function refreshStats() {
-  const s = await fetchJSON('/api/stats');
+  const [s, orders] = await Promise.all([
+    fetchJSON('/api/stats'),
+    fetchJSON('/api/orders').catch(() => []),
+  ]);
+  // Split totals by source so demo/fake money doesn't blend in with real.
+  let fake = 0;
+  let realRev = 0, realCost = 0, realProfit = 0;
+  let fakeRev = 0, fakeCost = 0, fakeProfit = 0;
+  for (const o of orders) {
+    const isFake = o.source === 'demo';
+    if (isFake) {
+      fake++;
+      if (o.totalAmount != null) fakeRev += o.totalAmount;
+      if (o.costPrice != null) fakeCost += o.costPrice;
+      if (o.profitAmount != null) fakeProfit += o.profitAmount;
+    } else {
+      if (o.totalAmount != null) realRev += o.totalAmount;
+      if (o.costPrice != null) realCost += o.costPrice;
+      if (o.profitAmount != null) realProfit += o.profitAmount;
+    }
+  }
   $('statOrders').textContent = fmt.format(s.totalOrders);
+  // Show a FAKE badge on the Total Orders card so demo-seeded data can't be
+  // mistaken for real revenue at a glance.
+  const card = $('statOrders').closest('.stat-card');
+  let badge = $('statOrdersFake');
+  if (fake > 0) {
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.id = 'statOrdersFake';
+      badge.className = 'stat-fake-badge';
+      $('statOrders').insertAdjacentElement('afterend', badge);
+    }
+    badge.textContent = `${fake} FAKE`;
+    badge.title = `${fake} of ${s.totalOrders} orders are demo-seeded and not real revenue`;
+    card.classList.add('has-fake');
+  } else if (badge) {
+    badge.remove();
+    card.classList.remove('has-fake');
+  }
   $('statRevenue').textContent = money(s.revenue);
   $('statProfit').textContent = money(s.profit);
   $('statCost').textContent = money(s.cost);
   $('statMargin').textContent = `${s.avgMarginPct}% avg margin`;
+
+  // Per-card "fake vs real" breakdown on the three money cards.
+  setFakeBreakdown('statRevenue', fakeRev, realRev);
+  setFakeBreakdown('statProfit', fakeProfit, realProfit);
+  setFakeBreakdown('statCost', fakeCost, realCost);
+}
+
+/** Append a small "(₹X fake · real ₹Y)" line under a money stat card. */
+function setFakeBreakdown(valueId, fakeAmt, realAmt) {
+  const card = $(valueId).closest('.stat-card');
+  if (!card) return;
+  let line = card.querySelector('.stat-fake-line');
+  if (fakeAmt > 0) {
+    if (!line) {
+      line = document.createElement('div');
+      line.className = 'stat-fake-line';
+      card.appendChild(line);
+    }
+    line.innerHTML = `<span class="fake-amt">${money(fakeAmt)} fake</span> · real <span class="real-amt">${money(realAmt)}</span>`;
+    card.classList.add('has-fake');
+  } else if (line) {
+    line.remove();
+    card.classList.remove('has-fake');
+  }
 }
 
 function timeAgo(iso) {
@@ -28,6 +90,10 @@ function timeAgo(iso) {
   return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 }
 
+function sourceLabel(s) {
+  return ({ whatsapp: 'WhatsApp', manual: 'Manual', ai: 'AI', regex: 'Parser', demo: 'FAKE' })[s] || s || '';
+}
+
 function renderOrders(orders) {
   const body = $('ordersBody');
   if (!orders.length) {
@@ -36,7 +102,7 @@ function renderOrders(orders) {
   }
   body.innerHTML = orders.map((o) => `
     <tr>
-      <td class="cust">${escapeHtml(o.customer)}</td>
+      <td class="cust">${escapeHtml(o.customer)}${o.source ? ` <span class="source-tag source-${o.source}" title="${escapeHtml(o.source)} order">${sourceLabel(o.source)}</span>` : ''}</td>
       <td><span class="item-tag">${escapeHtml(o.item)}</span></td>
       <td class="qty">${o.quantity != null ? fmt.format(o.quantity) + (o.unit ? ' ' + o.unit : '') : '—'}</td>
       <td class="money">${money(o.costPrice)}</td>

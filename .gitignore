@@ -24,3 +24,7 @@ android/local.properties
 .DS_Store
 Thumbs.db
 .wwebjs_auth/
+
+AGENTS.md
+qr.png
+bot-debug.log

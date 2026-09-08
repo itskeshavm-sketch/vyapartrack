@@ -1,25 +1,24 @@
-// VyaparTrack server: WhatsApp Baileys + Poolside AI parsing + REST API for the Android client.
+﻿// VyaparTrack server: WhatsApp (zapo-js) + Poolside AI parsing + REST API for the Android client.
 // Deploy to Render/Railway/Fly.io free tier. See README.md.
 
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const express = require('express');
-
 require('dotenv').config();
 
-const {
-  default: makeWASocket,
-  useMultiFileAuthState,
-  fetchLatestBaileysVersion,
-  DisconnectReason,
-} = require('@whiskeysockets/baileys');
+// zapo-js replaced Baileys in Sept 2026: WhatsApp's server silently rejects
+// Baileys' pairing-code registration crypto (Stage-3 companion_finish) while
+// zapo's implementation of the current protocol pairs successfully.
+const { WaClient, createStore } = require('zapo-js');
+const { createSqliteStore } = require('@zapo-js/store-sqlite');
 const QRCode = require('qrcode');
 const pino = require('pino');
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const DATA_DIR = process.env.VYAPAR_DATA_DIR || path.join(__dirname, 'data');
 const AUTH_DIR = process.env.VYAPAR_AUTH_DIR || path.join(__dirname, 'auth');
+const STORE_PATH = process.env.VYAPAR_AUTH_DB || path.join(AUTH_DIR, 'zapo.db');
 const POOLSIDE_API_KEY = process.env.POOLSIDE_API_KEY || '';
 const POOLSIDE_MODEL = process.env.POOLSIDE_MODEL || 'poolside/laguna-xs-2.1';
 const POOLSIDE_BASE_URL = process.env.POOLSIDE_BASE_URL || 'https://inference.poolside.ai/v1';
@@ -279,10 +278,10 @@ function pricingQuestionText(p) {
   const qty = p.unit ? `${p.examples[0] ? '' : ''}` : '';
   const itemLabel = p.unit ? `${p.item} (${p.unit})` : p.item;
   return (
-    `🛒 नया आइटम मिला: *${itemLabel}*\n\n` +
-    `1️⃣ आप इसे कितने में बेचते हैं? (₹ प्रति ${p.unit || 'यूनिट'})\n` +
-    `2️⃣ इसमें आपका खर्चा कितना है? (₹ प्रति ${p.unit || 'यूनिट'})\n\n` +
-    `ऐप में खोलकर भरें: Settings → Pricing`
+    `ðŸ›’ à¤¨à¤¯à¤¾ à¤†à¤‡à¤Ÿà¤® à¤®à¤¿à¤²à¤¾: *${itemLabel}*\n\n` +
+    `1ï¸âƒ£ à¤†à¤ª à¤‡à¤¸à¥‡ à¤•à¤¿à¤¤à¤¨à¥‡ à¤®à¥‡à¤‚ à¤¬à¥‡à¤šà¤¤à¥‡ à¤¹à¥ˆà¤‚? (â‚¹ à¤ªà¥à¤°à¤¤à¤¿ ${p.unit || 'à¤¯à¥‚à¤¨à¤¿à¤Ÿ'})\n` +
+    `2ï¸âƒ£ à¤‡à¤¸à¤®à¥‡à¤‚ à¤†à¤ªà¤•à¤¾ à¤–à¤°à¥à¤šà¤¾ à¤•à¤¿à¤¤à¤¨à¤¾ à¤¹à¥ˆ? (â‚¹ à¤ªà¥à¤°à¤¤à¤¿ ${p.unit || 'à¤¯à¥‚à¤¨à¤¿à¤Ÿ'})\n\n` +
+    `à¤à¤ª à¤®à¥‡à¤‚ à¤–à¥‹à¤²à¤•à¤° à¤­à¤°à¥‡à¤‚: Settings â†’ Pricing`
   );
 }
 
@@ -373,7 +372,7 @@ const ROMAN_INTENT_RE = new RegExp(
 );
 
 // ---- Native-script support (u-flag, \p{L}/\p{M} lookarounds) ----
-const NATIVE_DIGITS = '०१२३४५६७८९০১২৩৪৫৬৭৮৯௦௧௨௩௪௫௬௭௮௯౦౧౨౩౪౫౬౭౮౯೦೧೨೩೪೫೬೭೮೯൦൧൨൩൪൫൬൭൮൯੦੧੨੩੪੫੬੭੮੯۰۱۲۳۴۵۶۷۸۹';
+const NATIVE_DIGITS = 'à¥¦à¥§à¥¨à¥©à¥ªà¥«à¥¬à¥­à¥®à¥¯à§¦à§§à§¨à§©à§ªà§«à§¬à§­à§®à§¯à¯¦à¯§à¯¨à¯©à¯ªà¯«à¯¬à¯­à¯®à¯¯à±¦à±§à±¨à±©à±ªà±«à±¬à±­à±®à±¯à³¦à³§à³¨à³©à³ªà³«à³¬à³­à³®à³¯àµ¦àµ§àµ¨àµ©àµªàµ«àµ¬àµ­àµ®àµ¯à©¦à©§à©¨à©©à©ªà©«à©¬à©­à©®à©¯Û°Û±Û²Û³Û´ÛµÛ¶Û·Û¸Û¹';
 const DIGIT_MAP = (() => {
   const m = {};
   for (let c = 0; c < NATIVE_DIGITS.length; c += 10) {
@@ -384,60 +383,60 @@ const DIGIT_MAP = (() => {
 function normalizeDigits(s) { return String(s).replace(/./g, (ch) => DIGIT_MAP[ch] || ch); }
 
 const NATIVE_INTENT = [
-  'चाहिए', 'भेज दो', 'भेज देना', 'भेजो', 'बना दो', 'बना देना', 'दे दो', 'दे देना',
-  'तैयार कर दो', 'तैयार कर देना', 'पैक कर दो', 'पैक कर देना', 'पैक करके भेज दो',
-  'रख देना', 'डिलीवर कर दो', 'घर भेज', 'कितने का', 'कितने में', 'कितना लगेगा',
-  'भाव बताओ', 'रेट क्या', 'प्राइस बताओ', 'टोटल कितना', 'ऑर्डर',
-  'بھیج دو', 'بھیج دیں', 'بنا دو', 'بنا دیں', 'تیار کر دو', 'پیک کر دو', 'گھر بھیج',
-  'کتنے کا', 'کتنے میں', 'کتنا لگے گا', 'قیمت کیا', 'بھاؤ کیا', 'ٹوٹل کتنا', 'آرڈر', 'چاہیے',
-  'पाहिजे', 'पाठवा', 'पाठवून द्या', 'बनवून द्या', 'तयार करून', 'पॅक करून',
-  'किती पडेल', 'किती होईल', 'भाव काय', 'रेट सांगा', 'किंमत सांगा', 'टोटल किती',
-  'চাই', 'অর্ডার', 'পাঠিয়ে দিন', 'বানিয়ে দিন', 'তৈরি করে দিন',
-  'রেখে দিন', 'প্যাক করে দিন', 'কত পড়বে', 'কত হবে', 'দাম কত', 'কত টাকা', 'টোটাল কত',
-  'வேண்டும்', 'ஆர்டர்', 'அனுப்புங்க', 'அனுப்பி விடுங்க', 'செஞ்சு குடுங்க',
-  'ரெடி பண்ணுங்க', 'பேக் பண்ணுங்க', 'வீட்டுக்கு அனுப்புங்க',
-  'எவ்வளவு ஆகும்', 'எவ்வளவு வரும்', 'ரேட் என்ன', 'விலை என்ன', 'டோட்டல் எவ்வளவு',
-  'కావాలి', 'ఆర్డర్', 'పంపండి', 'పంపించేయండి', 'ఇవ్వండి', 'ఇచ్చేయండి',
-  'తయారు చేయండి', 'రెడీ చేయండి', 'ప్యాక్ చేయండి',
-  'ఎంత అవుతుంది', 'ఎంత పడుతుంది', 'రేట్ ఎంత', 'ధర ఎంత', 'టోటల్ ఎంత',
-  'ಬೇಕು', 'ಆರ್ಡರ್', 'ಕಳಿಸಿ', 'ಕಳುಹಿಸಿ', 'ಮನೆಗೆ ಕಳಿಸಿ', 'ತಯಾರಿಸಿ ಕೊಡಿ',
-  'ಇಟ್ಟು ಕೊಡಿ', 'ರೆಡಿ ಮಾಡಿ', 'ಪ್ಯಾಕ್ ಮಾಡಿ',
-  'ಎಷ್ಟು ಆಗುತ್ತೆ', 'ಎಷ್ಟು ಬರುತ್ತೆ', 'ಬೆಲೆ ಎಷ್ಟು', 'ರೇಟ್ ಎಷ್ಟು', 'ಟೋಟಲ್ ಎಷ್ಟು',
-  'വേണം', 'ഓർഡർ', 'അയച്ചു തരൂ', 'അയക്കൂ', 'ചെയ്ത് തരൂ', 'ഉണ്ടാക്കി തരൂ',
-  'പാക്ക് ചെയ്ത് തരൂ', 'വീട്ടിൽ അയക്കൂ',
-  'എത്ര ആകും', 'എത്ര വരും', 'വില എത്ര', 'റേറ്റ് എത്ര', 'ടോട്ടൽ എത്ര',
-  'જોઈએ', 'ઓર્ડર', 'મોકલી દો', 'મોકલી આપો', 'આપી દો', 'આપી આપો', 'બનાવી આપો',
-  'તૈયાર કરી', 'રેડી કરી', 'પેક કરી', 'રાખી દો',
-  'કેટલા થશે', 'કેટલું પડશે', 'ભાવ કેટલો', 'રેટ કેટલો', 'ટોટલ કેટલું',
-  'ਚਾਹੀਦਾ', 'ਆਰਡਰ', 'ਭੇਜ ਦਿਓ', 'ਬਣਾ ਦਿਓ', 'ਤਿਆਰ ਕਰ ਦਿਓ', 'ਰੈਡੀ ਕਰ ਦਿਓ',
-  'ਪੈਕ ਕਰ ਦਿਓ', 'ਰੱਖ ਦਿਓ', 'ਕਿੰਨੇ ਦਾ', 'ਕਿੰਨੇ ਪੈਸੇ', 'ਰੇਟ ਕੀ', 'ਭਾਅ ਕੀ', 'ਟੋਟਲ ਕਿੰਨਾ',
+  'à¤šà¤¾à¤¹à¤¿à¤', 'à¤­à¥‡à¤œ à¤¦à¥‹', 'à¤­à¥‡à¤œ à¤¦à¥‡à¤¨à¤¾', 'à¤­à¥‡à¤œà¥‹', 'à¤¬à¤¨à¤¾ à¤¦à¥‹', 'à¤¬à¤¨à¤¾ à¤¦à¥‡à¤¨à¤¾', 'à¤¦à¥‡ à¤¦à¥‹', 'à¤¦à¥‡ à¤¦à¥‡à¤¨à¤¾',
+  'à¤¤à¥ˆà¤¯à¤¾à¤° à¤•à¤° à¤¦à¥‹', 'à¤¤à¥ˆà¤¯à¤¾à¤° à¤•à¤° à¤¦à¥‡à¤¨à¤¾', 'à¤ªà¥ˆà¤• à¤•à¤° à¤¦à¥‹', 'à¤ªà¥ˆà¤• à¤•à¤° à¤¦à¥‡à¤¨à¤¾', 'à¤ªà¥ˆà¤• à¤•à¤°à¤•à¥‡ à¤­à¥‡à¤œ à¤¦à¥‹',
+  'à¤°à¤– à¤¦à¥‡à¤¨à¤¾', 'à¤¡à¤¿à¤²à¥€à¤µà¤° à¤•à¤° à¤¦à¥‹', 'à¤˜à¤° à¤­à¥‡à¤œ', 'à¤•à¤¿à¤¤à¤¨à¥‡ à¤•à¤¾', 'à¤•à¤¿à¤¤à¤¨à¥‡ à¤®à¥‡à¤‚', 'à¤•à¤¿à¤¤à¤¨à¤¾ à¤²à¤—à¥‡à¤—à¤¾',
+  'à¤­à¤¾à¤µ à¤¬à¤¤à¤¾à¤“', 'à¤°à¥‡à¤Ÿ à¤•à¥à¤¯à¤¾', 'à¤ªà¥à¤°à¤¾à¤‡à¤¸ à¤¬à¤¤à¤¾à¤“', 'à¤Ÿà¥‹à¤Ÿà¤² à¤•à¤¿à¤¤à¤¨à¤¾', 'à¤‘à¤°à¥à¤¡à¤°',
+  'Ø¨Ú¾ÛŒØ¬ Ø¯Ùˆ', 'Ø¨Ú¾ÛŒØ¬ Ø¯ÛŒÚº', 'Ø¨Ù†Ø§ Ø¯Ùˆ', 'Ø¨Ù†Ø§ Ø¯ÛŒÚº', 'ØªÛŒØ§Ø± Ú©Ø± Ø¯Ùˆ', 'Ù¾ÛŒÚ© Ú©Ø± Ø¯Ùˆ', 'Ú¯Ú¾Ø± Ø¨Ú¾ÛŒØ¬',
+  'Ú©ØªÙ†Û’ Ú©Ø§', 'Ú©ØªÙ†Û’ Ù…ÛŒÚº', 'Ú©ØªÙ†Ø§ Ù„Ú¯Û’ Ú¯Ø§', 'Ù‚ÛŒÙ…Øª Ú©ÛŒØ§', 'Ø¨Ú¾Ø§Ø¤ Ú©ÛŒØ§', 'Ù¹ÙˆÙ¹Ù„ Ú©ØªÙ†Ø§', 'Ø¢Ø±ÚˆØ±', 'Ú†Ø§ÛÛŒÛ’',
+  'à¤ªà¤¾à¤¹à¤¿à¤œà¥‡', 'à¤ªà¤¾à¤ à¤µà¤¾', 'à¤ªà¤¾à¤ à¤µà¥‚à¤¨ à¤¦à¥à¤¯à¤¾', 'à¤¬à¤¨à¤µà¥‚à¤¨ à¤¦à¥à¤¯à¤¾', 'à¤¤à¤¯à¤¾à¤° à¤•à¤°à¥‚à¤¨', 'à¤ªà¥…à¤• à¤•à¤°à¥‚à¤¨',
+  'à¤•à¤¿à¤¤à¥€ à¤ªà¤¡à¥‡à¤²', 'à¤•à¤¿à¤¤à¥€ à¤¹à¥‹à¤ˆà¤²', 'à¤­à¤¾à¤µ à¤•à¤¾à¤¯', 'à¤°à¥‡à¤Ÿ à¤¸à¤¾à¤‚à¤—à¤¾', 'à¤•à¤¿à¤‚à¤®à¤¤ à¤¸à¤¾à¤‚à¤—à¤¾', 'à¤Ÿà¥‹à¤Ÿà¤² à¤•à¤¿à¤¤à¥€',
+  'à¦šà¦¾à¦‡', 'à¦…à¦°à§à¦¡à¦¾à¦°', 'à¦ªà¦¾à¦ à¦¿à¦¯à¦¼à§‡ à¦¦à¦¿à¦¨', 'à¦¬à¦¾à¦¨à¦¿à¦¯à¦¼à§‡ à¦¦à¦¿à¦¨', 'à¦¤à§ˆà¦°à¦¿ à¦•à¦°à§‡ à¦¦à¦¿à¦¨',
+  'à¦°à§‡à¦–à§‡ à¦¦à¦¿à¦¨', 'à¦ªà§à¦¯à¦¾à¦• à¦•à¦°à§‡ à¦¦à¦¿à¦¨', 'à¦•à¦¤ à¦ªà¦¡à¦¼à¦¬à§‡', 'à¦•à¦¤ à¦¹à¦¬à§‡', 'à¦¦à¦¾à¦® à¦•à¦¤', 'à¦•à¦¤ à¦Ÿà¦¾à¦•à¦¾', 'à¦Ÿà§‹à¦Ÿà¦¾à¦² à¦•à¦¤',
+  'à®µà¯‡à®£à¯à®Ÿà¯à®®à¯', 'à®†à®°à¯à®Ÿà®°à¯', 'à®…à®©à¯à®ªà¯à®ªà¯à®™à¯à®•', 'à®…à®©à¯à®ªà¯à®ªà®¿ à®µà®¿à®Ÿà¯à®™à¯à®•', 'à®šà¯†à®žà¯à®šà¯ à®•à¯à®Ÿà¯à®™à¯à®•',
+  'à®°à¯†à®Ÿà®¿ à®ªà®£à¯à®£à¯à®™à¯à®•', 'à®ªà¯‡à®•à¯ à®ªà®£à¯à®£à¯à®™à¯à®•', 'à®µà¯€à®Ÿà¯à®Ÿà¯à®•à¯à®•à¯ à®…à®©à¯à®ªà¯à®ªà¯à®™à¯à®•',
+  'à®Žà®µà¯à®µà®³à®µà¯ à®†à®•à¯à®®à¯', 'à®Žà®µà¯à®µà®³à®µà¯ à®µà®°à¯à®®à¯', 'à®°à¯‡à®Ÿà¯ à®Žà®©à¯à®©', 'à®µà®¿à®²à¯ˆ à®Žà®©à¯à®©', 'à®Ÿà¯‹à®Ÿà¯à®Ÿà®²à¯ à®Žà®µà¯à®µà®³à®µà¯',
+  'à°•à°¾à°µà°¾à°²à°¿', 'à°†à°°à±à°¡à°°à±', 'à°ªà°‚à°ªà°‚à°¡à°¿', 'à°ªà°‚à°ªà°¿à°‚à°šà±‡à°¯à°‚à°¡à°¿', 'à°‡à°µà±à°µà°‚à°¡à°¿', 'à°‡à°šà±à°šà±‡à°¯à°‚à°¡à°¿',
+  'à°¤à°¯à°¾à°°à± à°šà±‡à°¯à°‚à°¡à°¿', 'à°°à±†à°¡à±€ à°šà±‡à°¯à°‚à°¡à°¿', 'à°ªà±à°¯à°¾à°•à± à°šà±‡à°¯à°‚à°¡à°¿',
+  'à°Žà°‚à°¤ à°…à°µà±à°¤à±à°‚à°¦à°¿', 'à°Žà°‚à°¤ à°ªà°¡à±à°¤à±à°‚à°¦à°¿', 'à°°à±‡à°Ÿà± à°Žà°‚à°¤', 'à°§à°° à°Žà°‚à°¤', 'à°Ÿà±‹à°Ÿà°²à± à°Žà°‚à°¤',
+  'à²¬à³‡à²•à³', 'à²†à²°à³à²¡à²°à³', 'à²•à²³à²¿à²¸à²¿', 'à²•à²³à³à²¹à²¿à²¸à²¿', 'à²®à²¨à³†à²—à³† à²•à²³à²¿à²¸à²¿', 'à²¤à²¯à²¾à²°à²¿à²¸à²¿ à²•à³Šà²¡à²¿',
+  'à²‡à²Ÿà³à²Ÿà³ à²•à³Šà²¡à²¿', 'à²°à³†à²¡à²¿ à²®à²¾à²¡à²¿', 'à²ªà³à²¯à²¾à²•à³ à²®à²¾à²¡à²¿',
+  'à²Žà²·à³à²Ÿà³ à²†à²—à³à²¤à³à²¤à³†', 'à²Žà²·à³à²Ÿà³ à²¬à²°à³à²¤à³à²¤à³†', 'à²¬à³†à²²à³† à²Žà²·à³à²Ÿà³', 'à²°à³‡à²Ÿà³ à²Žà²·à³à²Ÿà³', 'à²Ÿà³‹à²Ÿà²²à³ à²Žà²·à³à²Ÿà³',
+  'à´µàµ‡à´£à´‚', 'à´“àµ¼à´¡àµ¼', 'à´…à´¯à´šàµà´šàµ à´¤à´°àµ‚', 'à´…à´¯à´•àµà´•àµ‚', 'à´šàµ†à´¯àµà´¤àµ à´¤à´°àµ‚', 'à´‰à´£àµà´Ÿà´¾à´•àµà´•à´¿ à´¤à´°àµ‚',
+  'à´ªà´¾à´•àµà´•àµ à´šàµ†à´¯àµà´¤àµ à´¤à´°àµ‚', 'à´µàµ€à´Ÿàµà´Ÿà´¿àµ½ à´…à´¯à´•àµà´•àµ‚',
+  'à´Žà´¤àµà´° à´†à´•àµà´‚', 'à´Žà´¤àµà´° à´µà´°àµà´‚', 'à´µà´¿à´² à´Žà´¤àµà´°', 'à´±àµ‡à´±àµà´±àµ à´Žà´¤àµà´°', 'à´Ÿàµ‹à´Ÿàµà´Ÿàµ½ à´Žà´¤àµà´°',
+  'àªœà«‹àªˆàª', 'àª“àª°à«àª¡àª°', 'àª®à«‹àª•àª²à«€ àª¦à«‹', 'àª®à«‹àª•àª²à«€ àª†àªªà«‹', 'àª†àªªà«€ àª¦à«‹', 'àª†àªªà«€ àª†àªªà«‹', 'àª¬àª¨àª¾àªµà«€ àª†àªªà«‹',
+  'àª¤à«ˆàª¯àª¾àª° àª•àª°à«€', 'àª°à«‡àª¡à«€ àª•àª°à«€', 'àªªà«‡àª• àª•àª°à«€', 'àª°àª¾àª–à«€ àª¦à«‹',
+  'àª•à«‡àªŸàª²àª¾ àª¥àª¶à«‡', 'àª•à«‡àªŸàª²à«àª‚ àªªàª¡àª¶à«‡', 'àª­àª¾àªµ àª•à«‡àªŸàª²à«‹', 'àª°à«‡àªŸ àª•à«‡àªŸàª²à«‹', 'àªŸà«‹àªŸàª² àª•à«‡àªŸàª²à«àª‚',
+  'à¨šà¨¾à¨¹à©€à¨¦à¨¾', 'à¨†à¨°à¨¡à¨°', 'à¨­à©‡à¨œ à¨¦à¨¿à¨“', 'à¨¬à¨£à¨¾ à¨¦à¨¿à¨“', 'à¨¤à¨¿à¨†à¨° à¨•à¨° à¨¦à¨¿à¨“', 'à¨°à©ˆà¨¡à©€ à¨•à¨° à¨¦à¨¿à¨“',
+  'à¨ªà©ˆà¨• à¨•à¨° à¨¦à¨¿à¨“', 'à¨°à©±à¨– à¨¦à¨¿à¨“', 'à¨•à¨¿à©°à¨¨à©‡ à¨¦à¨¾', 'à¨•à¨¿à©°à¨¨à©‡ à¨ªà©ˆà¨¸à©‡', 'à¨°à©‡à¨Ÿ à¨•à©€', 'à¨­à¨¾à¨… à¨•à©€', 'à¨Ÿà©‹à¨Ÿà¨² à¨•à¨¿à©°à¨¨à¨¾',
 ];
 const NATIVE_UNITS = [
-  'किलो', 'केजी', 'किलोग्राम', 'किलोग्रॅम', 'কিলো', 'কেজি', 'কিলোগ্রাম', 'கிலோ', 'கிலோகிராம்',
-  'కిలో', 'కిలోగ్రామ్', 'కేజీ', 'ಕಿಲೋ', 'ಕಿಲೋಗ್ರಾಂ', 'ಕೆಜಿ', 'കിലോ', 'കിലോഗ്രാം',
-  'કિલો', 'કિલોગ્રામ', 'ਕਿਲੋ', 'ਕਿਲੋਗ੍ਰਾਮ', 'ਕੇਜੀ', 'کلو', 'کلوگرام',
-  'ग्राम', 'ग्रॅम', 'গ্রাম', 'கிராம்', 'గ్రాము', 'ಗ್ರಾಂ', 'ಗ್ರಾಮ', 'ഗ്രാം', 'ગ્રામ', 'ਗ੍ਰਾਮ', 'گرام',
-  'तोला', 'तोळा', 'तोळ', 'रत्ती', 'छटांक', 'চটক', 'ভরি', 'তোলা', 'தோலா', 'தோலை',
-  'తులం', 'తులా', 'ತೊಲ', 'ತೊಲೆ', 'ರತ್ತಿ', 'തൊല', 'രത്തി', 'તોલા', 'તોલ', 'રતી',
-  'ਤੋਲਾ', 'ਤੋਲ', 'ਰੱਤੀ', 'تولہ', 'تول', 'رتی', 'ماشہ',
-  'लिटर', 'লিটার', 'லிட்டர்', 'లీటర్', 'ಲೀಟರ್', 'ലിറ്റർ', 'લીટર', 'ਲੀਟਰ', 'لیٹر',
-  'मिलीलीटर', 'मिली',
-  'पीस', 'नग', 'পিস', 'টা', 'பீஸ்', 'పీస్', 'ముక్క', 'ಪೀಸ್', 'ಐಟಂ', 'എണ്ണം', 'પીસ', 'નંગ', 'ਪੀਸ', 'ਨਗ', 'پیس', 'عدد',
-  'दर्जन', 'डझन', 'ডজন', 'டஜன்', 'డజన్', 'ಡಜನ್', 'ഡസൻ', 'ડઝન', 'ਦਰਜਨ', 'درجن',
-  'కిలోలు', 'కిలోల', 'గ్రాములు', 'గ్రాముల', 'లీటర్లు', 'డజన్లు',
-  'सेर', 'शेर', 'সের', 'পোয়া', 'சேர்', 'படி', 'సేరు', 'ಸೇರು', 'സേർ', 'શેર', 'ਸੇਰ', 'سیر',
-  'पाव', 'பாவு', 'పావు', 'ಪಾವು', 'പാവ്', 'પાવ', 'ਪਾਵ', 'پاؤ',
+  'à¤•à¤¿à¤²à¥‹', 'à¤•à¥‡à¤œà¥€', 'à¤•à¤¿à¤²à¥‹à¤—à¥à¤°à¤¾à¤®', 'à¤•à¤¿à¤²à¥‹à¤—à¥à¤°à¥…à¤®', 'à¦•à¦¿à¦²à§‹', 'à¦•à§‡à¦œà¦¿', 'à¦•à¦¿à¦²à§‹à¦—à§à¦°à¦¾à¦®', 'à®•à®¿à®²à¯‹', 'à®•à®¿à®²à¯‹à®•à®¿à®°à®¾à®®à¯',
+  'à°•à°¿à°²à±‹', 'à°•à°¿à°²à±‹à°—à±à°°à°¾à°®à±', 'à°•à±‡à°œà±€', 'à²•à²¿à²²à³‹', 'à²•à²¿à²²à³‹à²—à³à²°à²¾à²‚', 'à²•à³†à²œà²¿', 'à´•à´¿à´²àµ‹', 'à´•à´¿à´²àµ‹à´—àµà´°à´¾à´‚',
+  'àª•àª¿àª²à«‹', 'àª•àª¿àª²à«‹àª—à«àª°àª¾àª®', 'à¨•à¨¿à¨²à©‹', 'à¨•à¨¿à¨²à©‹à¨—à©à¨°à¨¾à¨®', 'à¨•à©‡à¨œà©€', 'Ú©Ù„Ùˆ', 'Ú©Ù„ÙˆÚ¯Ø±Ø§Ù…',
+  'à¤—à¥à¤°à¤¾à¤®', 'à¤—à¥à¤°à¥…à¤®', 'à¦—à§à¦°à¦¾à¦®', 'à®•à®¿à®°à®¾à®®à¯', 'à°—à±à°°à°¾à°®à±', 'à²—à³à²°à²¾à²‚', 'à²—à³à²°à²¾à²®', 'à´—àµà´°à´¾à´‚', 'àª—à«àª°àª¾àª®', 'à¨—à©à¨°à¨¾à¨®', 'Ú¯Ø±Ø§Ù…',
+  'à¤¤à¥‹à¤²à¤¾', 'à¤¤à¥‹à¤³à¤¾', 'à¤¤à¥‹à¤³', 'à¤°à¤¤à¥à¤¤à¥€', 'à¤›à¤Ÿà¤¾à¤‚à¤•', 'à¦šà¦Ÿà¦•', 'à¦­à¦°à¦¿', 'à¦¤à§‹à¦²à¦¾', 'à®¤à¯‹à®²à®¾', 'à®¤à¯‹à®²à¯ˆ',
+  'à°¤à±à°²à°‚', 'à°¤à±à°²à°¾', 'à²¤à³Šà²²', 'à²¤à³Šà²²à³†', 'à²°à²¤à³à²¤à²¿', 'à´¤àµŠà´²', 'à´°à´¤àµà´¤à´¿', 'àª¤à«‹àª²àª¾', 'àª¤à«‹àª²', 'àª°àª¤à«€',
+  'à¨¤à©‹à¨²à¨¾', 'à¨¤à©‹à¨²', 'à¨°à©±à¨¤à©€', 'ØªÙˆÙ„Û', 'ØªÙˆÙ„', 'Ø±ØªÛŒ', 'Ù…Ø§Ø´Û',
+  'à¤²à¤¿à¤Ÿà¤°', 'à¦²à¦¿à¦Ÿà¦¾à¦°', 'à®²à®¿à®Ÿà¯à®Ÿà®°à¯', 'à°²à±€à°Ÿà°°à±', 'à²²à³€à²Ÿà²°à³', 'à´²à´¿à´±àµà´±àµ¼', 'àª²à«€àªŸàª°', 'à¨²à©€à¨Ÿà¨°', 'Ù„ÛŒÙ¹Ø±',
+  'à¤®à¤¿à¤²à¥€à¤²à¥€à¤Ÿà¤°', 'à¤®à¤¿à¤²à¥€',
+  'à¤ªà¥€à¤¸', 'à¤¨à¤—', 'à¦ªà¦¿à¦¸', 'à¦Ÿà¦¾', 'à®ªà¯€à®¸à¯', 'à°ªà±€à°¸à±', 'à°®à±à°•à±à°•', 'à²ªà³€à²¸à³', 'à²à²Ÿà²‚', 'à´Žà´£àµà´£à´‚', 'àªªà«€àª¸', 'àª¨àª‚àª—', 'à¨ªà©€à¨¸', 'à¨¨à¨—', 'Ù¾ÛŒØ³', 'Ø¹Ø¯Ø¯',
+  'à¤¦à¤°à¥à¤œà¤¨', 'à¤¡à¤à¤¨', 'à¦¡à¦œà¦¨', 'à®Ÿà®œà®©à¯', 'à°¡à°œà°¨à±', 'à²¡à²œà²¨à³', 'à´¡à´¸àµ»', 'àª¡àªàª¨', 'à¨¦à¨°à¨œà¨¨', 'Ø¯Ø±Ø¬Ù†',
+  'à°•à°¿à°²à±‹à°²à±', 'à°•à°¿à°²à±‹à°²', 'à°—à±à°°à°¾à°®à±à°²à±', 'à°—à±à°°à°¾à°®à±à°²', 'à°²à±€à°Ÿà°°à±à°²à±', 'à°¡à°œà°¨à±à°²à±',
+  'à¤¸à¥‡à¤°', 'à¤¶à¥‡à¤°', 'à¦¸à§‡à¦°', 'à¦ªà§‹à¦¯à¦¼à¦¾', 'à®šà¯‡à®°à¯', 'à®ªà®Ÿà®¿', 'à°¸à±‡à°°à±', 'à²¸à³‡à²°à³', 'à´¸àµ‡àµ¼', 'àª¶à«‡àª°', 'à¨¸à©‡à¨°', 'Ø³ÛŒØ±',
+  'à¤ªà¤¾à¤µ', 'à®ªà®¾à®µà¯', 'à°ªà°¾à°µà±', 'à²ªà²¾à²µà³', 'à´ªà´¾à´µàµ', 'àªªàª¾àªµ', 'à¨ªà¨¾à¨µ', 'Ù¾Ø§Ø¤',
 ];
 const NATIVE_UNIT_MAP = (() => {
   const groups = [
-    ['किलो केजी किलोग्राम किलोग्रॅম কিলো কেজি কিলোগ্রাম கிலோ கிலோகிராம் కిలో కిలోగ్రామ్ కేజీ ಕಿಲೋ ಕಿಲೋಗ್ರಾಂ ಕೆಜಿ കിലോ കിലോഗ്രാം કિલો કિલોગ્રામ ਕਿਲੋ ਕਿਲੋਗ੍ਰਾਮ ਕੇਜੀ کلو کلوگرام', 'kg'],
-    ['ग्राम ग्रॅम গ্রাম கிராம் గ్రాము ಗ್ರಾಂ ಗ್ರಾಮ ഗ്രാം ગ્રામ ਗ੍ਰਾਮ گرام तोला तोळा तोळ रत्ती छटांक ভরি তোলা தோலா தோலை తులం తులా ತೊಲ ತೊಲೆ ರತ್ತಿ തൊല രത്തિ તોલા તોલ રતી ਤੋਲਾ ਤੋਲ ਰੱਤੀ تولہ تول رتی ماشہ', 'g'],
-    ['लीटर লিটার லிட்டர் లీటర్ ಲೀಟರ್ ലിറ്റർ લીટર ਲੀટર لیٹر', 'l'],
-  ['मिलीलीटर मिली', 'ml'],
-    ['पीस नग পিস টা பீஸ் పీస్ ముక్క ಪೀಸ್ ಐಟಂ എണ്ണം પીસ નંગ ਪੀਸ ਨਗ پیس عدد', 'pcs'],
-    ['दर्जन डझन ডজন டஜன் డజನ್ ಡಜನ್ ഡസൻ ડઝન ਦર்ஜન درجن', 'dozen'],
-    ['కిలోలు కిలోల గ్రాములు గ్రాముల లీటర్లు డజన్లు', 'dozen'],
-    ['सेर शेर সের পোয়া சேர் படி సేరు ಸೇರು സേർ શેર ਸੇਰ سیر पाव பாவு పావు ಪಾವು പാവ് પાવ ਪাাਵ پاؤ', 'kg'],
+    ['à¤•à¤¿à¤²à¥‹ à¤•à¥‡à¤œà¥€ à¤•à¤¿à¤²à¥‹à¤—à¥à¤°à¤¾à¤® à¤•à¤¿à¤²à¥‹à¤—à¥à¤°à¥…à¦® à¦•à¦¿à¦²à§‹ à¦•à§‡à¦œà¦¿ à¦•à¦¿à¦²à§‹à¦—à§à¦°à¦¾à¦® à®•à®¿à®²à¯‹ à®•à®¿à®²à¯‹à®•à®¿à®°à®¾à®®à¯ à°•à°¿à°²à±‹ à°•à°¿à°²à±‹à°—à±à°°à°¾à°®à± à°•à±‡à°œà±€ à²•à²¿à²²à³‹ à²•à²¿à²²à³‹à²—à³à²°à²¾à²‚ à²•à³†à²œà²¿ à´•à´¿à´²àµ‹ à´•à´¿à´²àµ‹à´—àµà´°à´¾à´‚ àª•àª¿àª²à«‹ àª•àª¿àª²à«‹àª—à«àª°àª¾àª® à¨•à¨¿à¨²à©‹ à¨•à¨¿à¨²à©‹à¨—à©à¨°à¨¾à¨® à¨•à©‡à¨œà©€ Ú©Ù„Ùˆ Ú©Ù„ÙˆÚ¯Ø±Ø§Ù…', 'kg'],
+    ['à¤—à¥à¤°à¤¾à¤® à¤—à¥à¤°à¥…à¤® à¦—à§à¦°à¦¾à¦® à®•à®¿à®°à®¾à®®à¯ à°—à±à°°à°¾à°®à± à²—à³à²°à²¾à²‚ à²—à³à²°à²¾à²® à´—àµà´°à´¾à´‚ àª—à«àª°àª¾àª® à¨—à©à¨°à¨¾à¨® Ú¯Ø±Ø§Ù… à¤¤à¥‹à¤²à¤¾ à¤¤à¥‹à¤³à¤¾ à¤¤à¥‹à¤³ à¤°à¤¤à¥à¤¤à¥€ à¤›à¤Ÿà¤¾à¤‚à¤• à¦­à¦°à¦¿ à¦¤à§‹à¦²à¦¾ à®¤à¯‹à®²à®¾ à®¤à¯‹à®²à¯ˆ à°¤à±à°²à°‚ à°¤à±à°²à°¾ à²¤à³Šà²² à²¤à³Šà²²à³† à²°à²¤à³à²¤à²¿ à´¤àµŠà´² à´°à´¤àµà´¤àª¿ àª¤à«‹àª²àª¾ àª¤à«‹àª² àª°àª¤à«€ à¨¤à©‹à¨²à¨¾ à¨¤à©‹à¨² à¨°à©±à¨¤à©€ ØªÙˆÙ„Û ØªÙˆÙ„ Ø±ØªÛŒ Ù…Ø§Ø´Û', 'g'],
+    ['à¤²à¥€à¤Ÿà¤° à¦²à¦¿à¦Ÿà¦¾à¦° à®²à®¿à®Ÿà¯à®Ÿà®°à¯ à°²à±€à°Ÿà°°à± à²²à³€à²Ÿà²°à³ à´²à´¿à´±àµà´±àµ¼ àª²à«€àªŸàª° à¨²à©€àªŸàª° Ù„ÛŒÙ¹Ø±', 'l'],
+  ['à¤®à¤¿à¤²à¥€à¤²à¥€à¤Ÿà¤° à¤®à¤¿à¤²à¥€', 'ml'],
+    ['à¤ªà¥€à¤¸ à¤¨à¤— à¦ªà¦¿à¦¸ à¦Ÿà¦¾ à®ªà¯€à®¸à¯ à°ªà±€à°¸à± à°®à±à°•à±à°• à²ªà³€à²¸à³ à²à²Ÿà²‚ à´Žà´£àµà´£à´‚ àªªà«€àª¸ àª¨àª‚àª— à¨ªà©€à¨¸ à¨¨à¨— Ù¾ÛŒØ³ Ø¹Ø¯Ø¯', 'pcs'],
+    ['à¤¦à¤°à¥à¤œà¤¨ à¤¡à¤à¤¨ à¦¡à¦œà¦¨ à®Ÿà®œà®©à¯ à°¡à°œà²¨à³ à²¡à²œà²¨à³ à´¡à´¸àµ» àª¡àªàª¨ à¨¦àª°à¯à®œàª¨ Ø¯Ø±Ø¬Ù†', 'dozen'],
+    ['à°•à°¿à°²à±‹à°²à± à°•à°¿à°²à±‹à°² à°—à±à°°à°¾à°®à±à°²à± à°—à±à°°à°¾à°®à±à°² à°²à±€à°Ÿà°°à±à°²à± à°¡à°œà°¨à±à°²à±', 'dozen'],
+    ['à¤¸à¥‡à¤° à¤¶à¥‡à¤° à¦¸à§‡à¦° à¦ªà§‹à¦¯à¦¼à¦¾ à®šà¯‡à®°à¯ à®ªà®Ÿà®¿ à°¸à±‡à°°à± à²¸à³‡à²°à³ à´¸àµ‡àµ¼ àª¶à«‡àª° à¨¸à©‡à¨° Ø³ÛŒØ± à¤ªà¤¾à¤µ à®ªà®¾à®µà¯ à°ªà°¾à°µà± à²ªà²¾à²µà³ à´ªà´¾à´µàµ àªªàª¾àªµ à¨ªà¦¾à¦¾à¨µ Ù¾Ø§Ø¤', 'kg'],
   ];
   const m = {};
   for (const [words, c] of groups) for (const w of words.split(' ')) if (w) m[w] = c;
@@ -448,13 +447,13 @@ const B = '(?<![\\p{L}\\p{M}])';
 const A = '(?![\\p{L}\\p{M}])';
 const NATIVE_INTENT_RE = new RegExp(`${B}(?:${NATIVE_INTENT.join('|')})${A}`, 'u');
 const NATIVE_QUANTITY_RE = new RegExp(`${B}([${NATIVE_DIGITS}]+)\\s*(${NATIVE_UNITS.join('|')})${A}`, 'u');
-// The most common real-world mix: ASCII digits + native unit ("500 கிராம்", "2 किलो")
+// The most common real-world mix: ASCII digits + native unit ("500 à®•à®¿à®°à®¾à®®à¯", "2 à¤•à¤¿à¤²à¥‹")
 const MIXED_QUANTITY_RE = new RegExp(`${B}(\\d+(?:\\.\\d+)?)\\s*(${NATIVE_UNITS.join('|')})${A}`, 'u');
-// Devanagari spoken fractions: "आधा किलो", "डेढ़ किलो"...
-const NATIVE_FRACTION_RE = new RegExp(`${B}(आधा|अर्धा|आर्धा|सवा|डेढ़|ढाई)\\s*(किलो|केजी|ग्राम|लीटर)${A}`, 'u');
-const NATIVE_FRACTION_VALUES = { 'आधा': 0.5, 'अर्धा': 0.5, 'आर्धा': 0.5, 'सवा': 1.25, 'डेढ़': 1.5, 'ढाई': 2.5 };
+// Devanagari spoken fractions: "à¤†à¤§à¤¾ à¤•à¤¿à¤²à¥‹", "à¤¡à¥‡à¤¢à¤¼ à¤•à¤¿à¤²à¥‹"...
+const NATIVE_FRACTION_RE = new RegExp(`${B}(à¤†à¤§à¤¾|à¤…à¤°à¥à¤§à¤¾|à¤†à¤°à¥à¤§à¤¾|à¤¸à¤µà¤¾|à¤¡à¥‡à¤¢à¤¼|à¤¢à¤¾à¤ˆ)\\s*(à¤•à¤¿à¤²à¥‹|à¤•à¥‡à¤œà¥€|à¤—à¥à¤°à¤¾à¤®|à¤²à¥€à¤Ÿà¤°)${A}`, 'u');
+const NATIVE_FRACTION_VALUES = { 'à¤†à¤§à¤¾': 0.5, 'à¤…à¤°à¥à¤§à¤¾': 0.5, 'à¤†à¤°à¥à¤§à¤¾': 0.5, 'à¤¸à¤µà¤¾': 1.25, 'à¤¡à¥‡à¤¢à¤¼': 1.5, 'à¤¢à¤¾à¤ˆ': 2.5 };
 const NATIVE_ITEM_TAIL_RE = new RegExp(
-  `\\s*(?:${['चाहिए', 'भेज दो', 'भेज देना', 'दे दो', 'दे देना', 'बना दो', 'बना देना', 'रख दो', 'पैक कर दो', 'तैयार कर दो', 'घर भेज', 'डिलीवर कर दो', 'पाहिजे', 'पाठवा', 'पाठवून द्या', 'বানিয়ে দিন', 'তৈরি করে দিন', 'রেখে দিন', 'প্যাক করে দিন', 'পাঠিয়ে দিন', 'வேண்டும்', 'அனுப்புங்க', 'குடுங்க', 'செஞ்சு குடுங்க', 'ரெடி பண்ணுங்க', 'பேக் பண்ணுங்க', 'కావాలి', 'పంపండి', 'ఇవ్వండి', 'తయారు చేయండి', 'రెడీ చేయండి', 'ప్యాక్ చేయండి', 'ಬೇಕು', 'ಕಳಿಸಿ', 'ಕೊಡಿ', 'ತಯಾರಿಸಿ ಕೊಡಿ', 'ರೆಡಿ ಮಾಡಿ', 'ಪ್ಯಾಕ್ ಮಾಡಿ', 'വേണം', 'തരൂ', 'അയക്കൂ', 'ചെയ്ത് തരൂ', 'ഉണ്ടാക്കി തരൂ', 'പാക്ക് ചെയ്ത് തരൂ', 'જોઈએ', 'મોકલી દો', 'આપી દો', 'બનાવી આપો', 'તૈયાર કરી આપો', 'રેડી કરી દો', 'પેક કરી દો', 'રાખી દો', 'ਚਾਹੀਦਾ', 'ਭੇਜ ਦਿਓ', 'ਦੇ ਦਿਓ', 'ਬਣਾ ਦਿਓ', 'ਤਿਆਰ ਕਰ ਦਿਓ', 'ਪੈਕ ਕਰ ਦਿਓ', 'ਰੱਖ ਦਿਓ', 'چاہیے', 'بھیج دو', 'دے دو', 'بنا دو', 'تیار کر دو', 'پیک کر دو', 'گھر بھیج دو'].join('|')})${A}.*$`,
+  `\\s*(?:${['à¤šà¤¾à¤¹à¤¿à¤', 'à¤­à¥‡à¤œ à¤¦à¥‹', 'à¤­à¥‡à¤œ à¤¦à¥‡à¤¨à¤¾', 'à¤¦à¥‡ à¤¦à¥‹', 'à¤¦à¥‡ à¤¦à¥‡à¤¨à¤¾', 'à¤¬à¤¨à¤¾ à¤¦à¥‹', 'à¤¬à¤¨à¤¾ à¤¦à¥‡à¤¨à¤¾', 'à¤°à¤– à¤¦à¥‹', 'à¤ªà¥ˆà¤• à¤•à¤° à¤¦à¥‹', 'à¤¤à¥ˆà¤¯à¤¾à¤° à¤•à¤° à¤¦à¥‹', 'à¤˜à¤° à¤­à¥‡à¤œ', 'à¤¡à¤¿à¤²à¥€à¤µà¤° à¤•à¤° à¤¦à¥‹', 'à¤ªà¤¾à¤¹à¤¿à¤œà¥‡', 'à¤ªà¤¾à¤ à¤µà¤¾', 'à¤ªà¤¾à¤ à¤µà¥‚à¤¨ à¤¦à¥à¤¯à¤¾', 'à¦¬à¦¾à¦¨à¦¿à¦¯à¦¼à§‡ à¦¦à¦¿à¦¨', 'à¦¤à§ˆà¦°à¦¿ à¦•à¦°à§‡ à¦¦à¦¿à¦¨', 'à¦°à§‡à¦–à§‡ à¦¦à¦¿à¦¨', 'à¦ªà§à¦¯à¦¾à¦• à¦•à¦°à§‡ à¦¦à¦¿à¦¨', 'à¦ªà¦¾à¦ à¦¿à¦¯à¦¼à§‡ à¦¦à¦¿à¦¨', 'à®µà¯‡à®£à¯à®Ÿà¯à®®à¯', 'à®…à®©à¯à®ªà¯à®ªà¯à®™à¯à®•', 'à®•à¯à®Ÿà¯à®™à¯à®•', 'à®šà¯†à®žà¯à®šà¯ à®•à¯à®Ÿà¯à®™à¯à®•', 'à®°à¯†à®Ÿà®¿ à®ªà®£à¯à®£à¯à®™à¯à®•', 'à®ªà¯‡à®•à¯ à®ªà®£à¯à®£à¯à®™à¯à®•', 'à°•à°¾à°µà°¾à°²à°¿', 'à°ªà°‚à°ªà°‚à°¡à°¿', 'à°‡à°µà±à°µà°‚à°¡à°¿', 'à°¤à°¯à°¾à°°à± à°šà±‡à°¯à°‚à°¡à°¿', 'à°°à±†à°¡à±€ à°šà±‡à°¯à°‚à°¡à°¿', 'à°ªà±à°¯à°¾à°•à± à°šà±‡à°¯à°‚à°¡à°¿', 'à²¬à³‡à²•à³', 'à²•à²³à²¿à²¸à²¿', 'à²•à³Šà²¡à²¿', 'à²¤à²¯à²¾à²°à²¿à²¸à²¿ à²•à³Šà²¡à²¿', 'à²°à³†à²¡à²¿ à²®à²¾à²¡à²¿', 'à²ªà³à²¯à²¾à²•à³ à²®à²¾à²¡à²¿', 'à´µàµ‡à´£à´‚', 'à´¤à´°àµ‚', 'à´…à´¯à´•àµà´•àµ‚', 'à´šàµ†à´¯àµà´¤àµ à´¤à´°àµ‚', 'à´‰à´£àµà´Ÿà´¾à´•àµà´•à´¿ à´¤à´°àµ‚', 'à´ªà´¾à´•àµà´•àµ à´šàµ†à´¯àµà´¤àµ à´¤à´°àµ‚', 'àªœà«‹àªˆàª', 'àª®à«‹àª•àª²à«€ àª¦à«‹', 'àª†àªªà«€ àª¦à«‹', 'àª¬àª¨àª¾àªµà«€ àª†àªªà«‹', 'àª¤à«ˆàª¯àª¾àª° àª•àª°à«€ àª†àªªà«‹', 'àª°à«‡àª¡à«€ àª•àª°à«€ àª¦à«‹', 'àªªà«‡àª• àª•àª°à«€ àª¦à«‹', 'àª°àª¾àª–à«€ àª¦à«‹', 'à¨šà¨¾à¨¹à©€à¨¦à¨¾', 'à¨­à©‡à¨œ à¨¦à¨¿à¨“', 'à¨¦à©‡ à¨¦à¨¿à¨“', 'à¨¬à¨£à¨¾ à¨¦à¨¿à¨“', 'à¨¤à¨¿à¨†à¨° à¨•à¨° à¨¦à¨¿à¨“', 'à¨ªà©ˆà¨• à¨•à¨° à¨¦à¨¿à¨“', 'à¨°à©±à¨– à¨¦à¨¿à¨“', 'Ú†Ø§ÛÛŒÛ’', 'Ø¨Ú¾ÛŒØ¬ Ø¯Ùˆ', 'Ø¯Û’ Ø¯Ùˆ', 'Ø¨Ù†Ø§ Ø¯Ùˆ', 'ØªÛŒØ§Ø± Ú©Ø± Ø¯Ùˆ', 'Ù¾ÛŒÚ© Ú©Ø± Ø¯Ùˆ', 'Ú¯Ú¾Ø± Ø¨Ú¾ÛŒØ¬ Ø¯Ùˆ'].join('|')})${A}.*$`,
   'u'
 );
 
@@ -593,9 +592,10 @@ async function recordParsedOrder(parsed, senderName, senderJid) {
     addPendingPricing(priced, senderJid);
     const fresh = loadPending().find((p) => !before.includes(p.key));
     // Ask the vendor in their own WhatsApp chat ("Message yourself")
-    if (fresh && sock && sock.user) {
+    if (fresh && client && client.connected) {
       try {
-        await sock.sendMessage(jidNormalizedUser(sock), { text: pricingQuestionText(fresh) });
+        const meJid = client.getCredentials()?.meJid;
+        if (meJid) await client.message.send(meJid, { type: 'text', text: pricingQuestionText(fresh) });
       } catch {}
     }
   }
@@ -603,7 +603,8 @@ async function recordParsedOrder(parsed, senderName, senderJid) {
 }
 
 // ============ WhatsApp bot ============
-let sock = null;
+let client = null;
+let connectPromise = null;
 
 // jid -> saved WhatsApp contact name (from the user's address book).
 // Indexed by BOTH the phone jid and the LID jid - messages may arrive as either.
@@ -623,8 +624,8 @@ function loadContacts() {
   } catch {}
 }
 loadContacts();
-/** WhatsApp reports masked phones ("+91………39") as chat/profile display names - never treat those as names. */
-function isMaskedName(name) { return /[•…]/.test(String(name || '')); }
+/** WhatsApp reports masked phones ("+91â€¦â€¦â€¦39") as chat/profile display names - never treat those as names. */
+function isMaskedName(name) { return /[â€¢â€¦]/.test(String(name || '')); }
 function rememberContact(c) {
   if (!c || !c.id || !c.name || isMaskedName(c.name)) return;
   contactNames.set(c.id, c.name);
@@ -673,7 +674,7 @@ function scheduleNameBackfill(orderId, jid) {
 
 /**
  * Sender display: saved contact name -> real phone number. Never the WhatsApp
- * profile/display name (it's often a masked "+91………39" or a random nickname).
+ * profile/display name (it's often a masked "+91â€¦â€¦â€¦39" or a random nickname).
  */
 function resolveSenderName(jid, pushName) {
   void pushName; // intentionally unused - display names are not shown
@@ -694,237 +695,193 @@ let botStatus = {
   lastDisconnectCode: null,
   startedAt: null,
 };
-
-// Backoff for reconnects: restarting every few seconds for hours is what gets
-// an IP/device throttled by WhatsApp in the first place.
-let reconnectAttempts = 0;
-function nextReconnectDelayMs() {
-  reconnectAttempts++;
-  return Math.min(60000, 5000 * Math.pow(2, reconnectAttempts - 1));
-}
-
-// WhatsApp kills the pairing session ~2-3 minutes after the code is issued.
-// NEVER rotate a code while it is on screen: minting a new one invalidates the
-// code the user is mid-way through typing. A fresh code is minted only when
-// the session actually died (401 -> restart) or the user taps "Get code" again.
-const PAIRING_CODE_TTL_MS = 150000; // rough validity estimate for the countdown
-const PAIRING_REUSE_MS = 60000;     // re-tap within a minute returns the same code
-let pairingPhone = null;
+// Pairing code TTL for the dashboard countdown only.
+const PAIRING_CODE_TTL_MS = 150000;
 let pairingCodeAt = 0;
-let pairingKeeperRunning = false;
-let pairingInflight = null;
 
-function notePairingCode(code, phone) {
-  pairingPhone = phone;
+function notePairingCode(code) {
   pairingCodeAt = Date.now();
   botStatus.pairingCode = code;
   botStatus.pairingExpiresAt = new Date(pairingCodeAt + PAIRING_CODE_TTL_MS).toISOString();
 }
 
-/** Wait for the WhatsApp socket to open, then request the code. Retries through reconnects. */
-async function requestCodeWithRetry(phone) {
-  const deadline = Date.now() + 45000;
-  let lastErr = new Error('WhatsApp connection is not ready yet');
-  while (Date.now() < deadline) {
-    if (!sock) throw new Error('Bot not started yet');
-    if (sock.ws?.isOpen) {
-      try {
-        return await sock.requestPairingCode(phone);
-      } catch (err) {
-        lastErr = err; // socket died mid-request - wait for the auto-reconnect and try again
-      }
-    }
-    await new Promise((r) => setTimeout(r, 3000));
-  }
-  throw lastErr;
-}
-
+/** Mint a pairing code once per click. WhatsApp rate-limits pairing requests
+ *  (429 rate-overlimit) and ANY retry extends the window - so surface the
+ *  error instead of auto-retrying. */
 async function requestPairingCode(phoneRaw) {
-  if (!sock) throw new Error('Bot not started yet');
+  if (!client) throw new Error('Bot not started yet');
   let phone = String(phoneRaw).replace(/\D/g, '');
   if (phone.length === 10) phone = '91' + phone; // assume Indian number
   if (phone.length < 11) throw new Error('Invalid phone number');
 
-  // Same number + code minted <60s ago + socket alive -> hand back the same
-  // code (a re-tap must NOT invalidate a code the user may be entering)
-  const fresh = botStatus.pairingCode && pairingPhone === phone
-    && Date.now() - pairingCodeAt < PAIRING_REUSE_MS;
-  if (fresh && sock.ws?.isOpen) return botStatus.pairingCode;
+  // Same code minted <60s ago -> hand it back (a re-tap must not invalidate a
+  // code the user may be entering)
+  if (botStatus.pairingCode && Date.now() - pairingCodeAt < 60000) {
+    return botStatus.pairingCode;
+  }
 
-  // Double-tap dedup: don't mint two codes for the same request
-  if (pairingInflight && pairingInflight.phone === phone) return pairingInflight.promise;
-
-  const promise = (async () => {
-    const code = await requestCodeWithRetry(phone);
-    notePairingCode(code, phone);
-    return code;
-  })();
-  pairingInflight = { phone, promise };
   try {
-    return await promise;
-  } finally {
-    if (pairingInflight?.promise === promise) pairingInflight = null;
+    const code = await client.auth.requestPairingCode(phone);
+    console.log(`[bot] pairing code minted for +${phone}: ${code}`);
+    notePairingCode(code);
+    return code;
+  } catch (err) {
+    const msg = String(err?.message || err);
+    console.error(`[bot] pairing code request failed: ${msg}`);
+    if (/rate-overlimit|429/i.test(msg)) {
+      throw new Error('WhatsApp is rate-limiting pairing attempts for this account. Wait a few days without attempts, then try again.');
+    }
+    if (/not ready|reconnect/i.test(msg)) {
+      throw new Error('WhatsApp is reconnecting - tap again in a few seconds');
+    }
+    throw new Error(msg);
   }
 }
 
-/** Mint a pairing code for the remembered number once the socket is back (after a restart) - never rotate mid-login.
- *  A code older than its TTL is dead on WhatsApp's side, so rotating it is safe. */
-function startPairingKeeper() {
-  setInterval(async () => {
-    if (pairingKeeperRunning) return;
-    if (botStatus.connected || !pairingPhone) return;
-    if (botStatus.pairingCode && Date.now() - pairingCodeAt < PAIRING_CODE_TTL_MS) return; // live code on screen - leave it alone
-    if (!sock || !sock.ws?.isOpen) return;
-    pairingKeeperRunning = true;
-    try {
-      const code = await sock.requestPairingCode(pairingPhone);
-      notePairingCode(code, pairingPhone);
-      console.log('[bot] pairing code re-issued automatically (fresh session)');
-    } catch { /* keeper retries on the next tick */ }
-    finally { pairingKeeperRunning = false; }
-  }, 10000);
-}
-
 async function startBot() {
-  const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
-  let version;
-  try { ({ version } = await fetchLatestBaileysVersion()); } catch { version = undefined; }
-
-  sock = makeWASocket({
-    version,
-    auth: state,
-    printQRInTerminal: false,
-    syncFullHistory: false,
-    markOnlineOnConnect: false,
-    logger: pino({ level: 'silent' }),
+  const zapoStore = createStore({
+    backends: { sqlite: createSqliteStore({ path: STORE_PATH }) },
+    providers: {
+      auth: 'sqlite', signal: 'sqlite', senderKey: 'sqlite', appState: 'sqlite',
+      preKey: 'sqlite', session: 'sqlite', identity: 'sqlite',
+      messages: 'none', threads: 'none', contacts: 'none', privacyToken: 'sqlite',
+    },
   });
+  const logger = pino({ level: process.env.WA_DEBUG === '1' ? 'debug' : 'error' });
+  client = new WaClient({ store: zapoStore, sessionId: 'default', logger });
 
-  sock.ev.on('creds.update', saveCreds);
-  // Saved contact names arrive here on first connect (full address book sync)
-  sock.ev.on('messaging-history.set', ({ contacts = [], chats = [] } = {}) => {
-    contacts.forEach(rememberContact);
-    chats.forEach((ch) => { if (ch.name && ch.id) contactNames.set(ch.id, ch.name); });
-    console.log(`[contacts] history sync: ${contacts.length} contacts, map now has ${contactNames.size} names`);
-  });
-  // New/renamed contacts saved while connected
-  sock.ev.on('contacts.upsert', (cs) => cs.forEach(rememberContact));
-  sock.ev.on('contacts.update', (cs) => cs.forEach(rememberContact));
-  // Link LID jids (how messages arrive) to phone jids (how contacts are saved)
-  sock.ev.on('lid-mapping.update', rememberLidMapping);
-
-  sock.ev.on('connection.update', async (update) => {
-    const { connection, lastDisconnect, qr } = update;
-    if (qr) {
-      try {
-        botStatus.qrDataUrl = await QRCode.toDataURL(qr, { margin: 1, width: 260 });
-        botStatus.connected = false;
-        botStatus.connecting = true;
-        botStatus.lastError = null;
-        botStatus.startedAt = new Date().toISOString();
-        console.log('[bot] QR ready');
-      } catch (err) {
-        console.error('[bot] QR render failed:', err.message);
-      }
-    }
-    if (connection === 'connecting') botStatus.connecting = true;
-    if (connection === 'open') {
-      botStatus = { ...botStatus, connected: true, connecting: false, qrDataUrl: null, pairingCode: null, pairingExpiresAt: null, lastError: null, lastDisconnectCode: null };
-      reconnectAttempts = 0;
-      pairingPhone = null;
-      console.log('[bot] WhatsApp connected');
-    }
-    if (connection === 'close') {
-      const code = lastDisconnect?.error?.output?.statusCode;
-      const loggedOut = code === DisconnectReason.loggedOut;
+  client.on('auth_qr', async ({ qr }) => {
+    try {
+      botStatus.qrDataUrl = await QRCode.toDataURL(qr, { margin: 1, width: 260 });
       botStatus.connected = false;
+      botStatus.connecting = true;
+      botStatus.lastError = null;
+      botStatus.startedAt = new Date().toISOString();
+      console.log('[bot] QR ready');
+    } catch (err) {
+      console.error('[bot] QR render failed:', err.message);
+    }
+  });
+
+  client.on('auth_paired', () => {
+    botStatus.connected = true;
+    botStatus.connecting = false;
+    botStatus.qrDataUrl = null;
+    botStatus.pairingCode = null;
+    botStatus.pairingExpiresAt = null;
+    console.log('[bot] WhatsApp paired');
+  });
+
+  client.on('connection', async (event) => {
+    if (event.status === 'open') {
+      botStatus.connected = true;
       botStatus.connecting = false;
-      botStatus.lastDisconnectCode = code ?? null;
-      // A dead/expired pairing session surfaces as 401 loggedOut. The old auth
-      // files are useless then - keeping them makes every retry fail with
-      // "Connection Closed" - so wipe them and start a fresh linkable socket.
-      botStatus.lastError = loggedOut ? 'Previous link expired - get a new code' : 'Connection lost - reconnecting...';
+      botStatus.qrDataUrl = null;
       botStatus.pairingCode = null;
       botStatus.pairingExpiresAt = null;
-      pairingCodeAt = 0;
-      console.warn('[bot] closed:', code, lastDisconnect?.error?.message || '', loggedOut ? '(logged out - resetting session)' : '');
-      if (loggedOut) {
-        try {
-          fs.rmSync(AUTH_DIR, { recursive: true, force: true });
-          fs.mkdirSync(AUTH_DIR, { recursive: true });
-        } catch (e) { console.error('[bot] auth reset failed:', e.message); }
-      }
-      // Back off so a crash-loop can't hammer WhatsApp (each restart also
+      botStatus.lastError = null;
+      botStatus.lastDisconnectCode = null;
+      reconnectAttempts = 0;
+      console.log('[bot] WhatsApp connected');
+      return;
+    }
+    // status === 'close'
+    botStatus.connected = false;
+    botStatus.connecting = false;
+    botStatus.qrDataUrl = null;
+    botStatus.pairingCode = null;
+    botStatus.pairingExpiresAt = null;
+    pairingCodeAt = 0;
+    try { client.disconnect(); } catch {}
+    if (event.isLogout) {
+      // Device was unlinked - the persisted session is useless. Wipe the DB so
+      // the next start presents a fresh linkable session.
+      reconnectAttempts = 0;
+      botStatus.lastDisconnectCode = 401;
+      botStatus.lastError = 'Previous link expired - get a new code';
+      console.warn('[bot] closed: logged out - wiping session db');
+      try {
+        fs.rmSync(STORE_PATH, { force: true });
+        for (const suffix of ['-wal', '-shm']) fs.rmSync(STORE_PATH + suffix, { force: true });
+      } catch (e) { console.error('[bot] session wipe failed:', e.message); }
+    } else {
+      // Backoff so a crash-loop can't hammer WhatsApp (each restart also
       // invalidates any outstanding pairing code).
-      const delay = nextReconnectDelayMs();
-      console.log(`[bot] reconnecting in ${Math.round(delay / 1000)}s (attempt ${reconnectAttempts})`);
+      reconnectAttempts = Math.min(reconnectAttempts + 1, 6);
+      const delay = Math.min(300000, 5000 * Math.pow(2, reconnectAttempts - 1));
+      botStatus.lastDisconnectCode = typeof event.code === 'number' ? event.code : null;
+      botStatus.lastError = 'Connection lost - reconnecting...';
+      console.warn(`[bot] closed: ${event.reason || event.code || 'unknown'} - reconnecting in ${Math.round(delay / 1000)}s (attempt ${reconnectAttempts})`);
       setTimeout(() => startBot().catch((e) => console.error(e)), delay);
     }
   });
 
-  sock.ev.on('messages.upsert', async ({ messages, type }) => {
+  client.on('message', async (event) => {
     try {
-      if (type !== 'notify') return;
-      const msg = messages[0];
-      if (!msg.message || msg.key.fromMe) return;
+      const key = event.key || {};
+      const chatJid = String(key.remoteJid || '');
+      if (!chatJid || key.fromMe) return;
       // Ignore newsletters/channels and broadcast statuses - marketing posts
       // there were being parsed as phantom orders.
-      const jid = String(msg.key.remoteJid);
-      if (jid === 'status@broadcast' || jid.endsWith('@broadcast') || jid.endsWith('@newsletter')) return;
-      const senderJid = msg.key.participant || msg.key.remoteJid; // handles groups too
-      const text = msg.message.conversation
-        || msg.message.extendedTextMessage?.text
-        || msg.message.imageMessage?.caption
+      if (chatJid === 'status@broadcast' || chatJid.endsWith('@broadcast') || chatJid.endsWith('@newsletter')) return;
+
+      const proto = event.message || {};
+      const text = proto.conversation
+        || proto.extendedTextMessage?.text
+        || proto.imageMessage?.caption
         || '';
       if (!text) return;
       // Ignore messages that are mostly links (spam/marketing)
       const linkCount = (text.match(/https?:\/\//gi) || []).length;
       if (linkCount >= 1 && text.replace(/https?:\/\/\S+/gi, '').trim().length < 20) return;
 
-      // Every message carries the sender's other jid (phone <-> LID) in
-      // participantAlt / remoteJidAlt - learn the mapping so saved contact
-      // names resolve correctly even though messages arrive as LIDs.
-      const senderAlt = msg.key.participantAlt || msg.key.remoteJidAlt;
-      if (senderAlt) {
-        const altIsLid = senderAlt.endsWith('@lid');
-        const lid = altIsLid ? senderAlt : senderJid;
-        const pn = altIsLid ? senderJid : senderAlt;
-        if (lid.endsWith('@lid') && pn.endsWith('@s.whatsapp.net')) {
-          rememberLidMapping({ lid, pn });
-        }
-      }
-
-      const senderName = resolveSenderName(senderJid, msg.pushName);
+      // zapo resolves LID jids internally, but masked senders (not saved in
+      // contacts) still arrive as @lid - the real phone rides in the Alt fields.
+      const alt = key.remoteJidAlt || key.participantAlt;
+      const senderJid = String((alt && alt.endsWith('@s.whatsapp.net') ? alt : (key.participant || chatJid)));
+      const senderName = resolveSenderName(senderJid, event.pushName);
 
       const order = await parseOrder(text);
       if (!order) return;
 
       // Catalog pricing + pending queue (shared with the REST API)
       const rec = await recordParsedOrder(order, senderName, senderJid);
-      console.log(`[bot] Order: ${rec.customer} | from ${senderJid} pushName=${msg.pushName || 'none'} | ${rec.quantity ?? ''}${rec.unit ?? ''} ${rec.item} | total ${rec.totalAmount ?? '-'}`);
+      console.log(`[bot] Order: ${rec.customer} | from ${senderJid} pushName=${event.pushName || 'none'} | ${rec.quantity ?? ''}${rec.unit ?? ''} ${rec.item} | total ${rec.totalAmount ?? '-'}`);
 
       if (process.env.AUTO_REPLY !== 'false') {
         const pricedReply = rec.totalAmount != null;
-        await sock.sendMessage(msg.key.remoteJid, {
+        await client.message.send(chatJid, {
+          type: 'text',
           text: pricedReply
             ? `✅ *ऑर्डर मिल गया!*\n` +
-              `👤 ${rec.customer}\n` +
               `📦 ${rec.quantity ?? '—'}${rec.unit ? ' ' + rec.unit : ''} ${rec.item}\n` +
               `💰 लागत: ₹${rec.costPrice ?? '—'} | मुनाफ़ा: ₹${rec.profitAmount ?? '—'}${rec.profitPercent != null ? ` (${rec.profitPercent}%)` : ''}\n` +
               `🧾 कुल: ₹${rec.totalAmount ?? '—'}\n\nधन्यवाद! 🙏`
             : `✅ *आपका ऑर्डर मिल गया!* ${rec.quantity ?? ''}${rec.unit ? ' ' + rec.unit : ''} ${rec.item}\n` +
               `🧾 कीमत जल्द ही कन्फर्म होगी। धन्यवाद! 🙏`,
-        }, { quoted: msg });
+          contextInfo: {
+            quotedMessageId: key.id,
+            quotedParticipant: key.participant || chatJid,
+            quotedRemoteJid: chatJid,
+            quotedMessage: proto,
+          },
+        });
       }
     } catch (err) {
       console.error('[bot] handler error:', err.message);
     }
   });
-}
 
-/** Vendor's own jid ("Message yourself") for price questions and notices. */
-function jidNormalizedUser(sock) {
-  const raw = String(sock?.user?.id || '');
-  return raw.includes('@') ? raw : raw.replace(/[^0-9]/g, '') + '@s.whatsapp.net';
+  // connect() resolves only after the device is paired; run it in the
+  // background and surface pairing prompts via the auth_* events above.
+  connectPromise = client.connect().then(() => {
+    botStatus.connected = true;
+    botStatus.connecting = false;
+  }).catch((err) => {
+    botStatus.connecting = false;
+    botStatus.lastError = err?.message || String(err);
+    console.error('[bot] connect failed:', err?.message || err);
+  });
 }
 
 /** Vendor fills prices for a pending item -> save to catalog, re-price open orders. */
@@ -975,7 +932,7 @@ function auth(req, res, next) {
   next();
 }
 
-app.get('/api/health', (req, res) => res.json({ ok: true, aiConfigured: Boolean(POOLSIDE_API_KEY), aiModel: POOLSIDE_MODEL, botStarted: Boolean(sock) }));
+app.get('/api/health', (req, res) => res.json({ ok: true, aiConfigured: Boolean(POOLSIDE_API_KEY), aiModel: POOLSIDE_MODEL, botStarted: Boolean(client) }));
 app.get('/api/status', auth, (req, res) =>
   res.json({ ...botStatus, aiConfigured: Boolean(POOLSIDE_API_KEY), aiModel: POOLSIDE_MODEL })
 );
@@ -1069,6 +1026,5 @@ app.post('/api/pending-pricing/:id/resolve', auth, (req, res) => {
 app.listen(PORT, () => {
   console.log(`VyaparTrack server on :${PORT}`);
   console.log(`API token (save it!): ${API_TOKEN}`);
-  startPairingKeeper();
   startBot().catch((err) => console.error('[bot] failed to start:', err.message));
 });

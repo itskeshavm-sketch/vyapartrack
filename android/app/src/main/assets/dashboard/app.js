@@ -2,7 +2,7 @@
 
 const $ = (id) => document.getElementById(id);
 const STORAGE_KEY = 'vyapartrack.orders.v1';
-const DEFAULT_SERVER_URL = 'https://vyapartrack.onrender.com';
+const DEFAULT_SERVER_URL = 'https://vyapartrack-1.onrender.com';
 const DEFAULT_API_TOKEN = '44fff7e79de139a9e85b0e77c9c5017a0b84dac30978e4f6bf';
 
 let pollTimer = null;
