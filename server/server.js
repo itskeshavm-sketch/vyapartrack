@@ -739,6 +739,8 @@ async function requestPairingCode(phoneRaw) {
 }
 
 async function startBot() {
+  // The SQLite store requires the parent directory to exist at open time.
+  fs.mkdirSync(path.dirname(STORE_PATH), { recursive: true });
   const zapoStore = createStore({
     backends: { sqlite: createSqliteStore({ path: STORE_PATH }) },
     providers: {
