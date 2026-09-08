@@ -101,6 +101,10 @@ async function startBot(onOrderRecorded) {
   botStatus.connecting = true;
   botStatus.lastError = null;
 
+  // The SQLite store cannot create missing parent directories itself - and on
+  // a fresh clone/Render deploy the auth dir doesn't exist yet.
+  fs.mkdirSync(path.dirname(STORE_PATH), { recursive: true });
+
   const zapoStore = createStore({
     backends: { sqlite: createSqliteStore({ path: STORE_PATH }) },
     providers: {
