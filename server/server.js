@@ -83,14 +83,15 @@ function repriceOrdersForItem(entry) {
     if (!sameItem) continue;
     const qtyIn = convertQty(o.quantity, o.unit, entry.unit, entry.pieceWeight);
     if (qtyIn == null) continue; // incompatible units - leave the order alone
+    const perQty = Number(entry.priceQty) > 0 ? Number(entry.priceQty) : 1;
     if (o.pricedTotalBy === 'catalog' || o.totalAmount == null) {
-      o.totalAmount = round2(entry.sellPrice * qtyIn);
+      o.totalAmount = round2(entry.sellPrice * qtyIn / perQty);
       o.pricedTotalBy = 'catalog';
     }
     if (o.pricedCostBy === 'catalog') {
-      if (entry.costPrice != null) o.costPrice = round2(entry.costPrice * qtyIn);
+      if (entry.costPrice != null) o.costPrice = round2(entry.costPrice * qtyIn / perQty);
     } else if (o.costPrice == null && entry.costPrice != null) {
-      o.costPrice = round2(entry.costPrice * qtyIn);
+      o.costPrice = round2(entry.costPrice * qtyIn / perQty);
       o.pricedCostBy = 'catalog';
     }
     if (o.costPrice != null && o.totalAmount != null) {
@@ -238,8 +239,9 @@ function applyCatalogPricing(order) {
   // re-prices those - but never prices the customer's message stated itself.
   const filledTotal = priced.totalAmount == null;
   const filledCost = priced.costPrice == null && item.costPrice != null;
-  if (filledTotal) priced.totalAmount = round2(item.sellPrice * qtyInItemUnits);
-  if (filledCost) priced.costPrice = round2(item.costPrice * qtyInItemUnits);
+  const perQty = Number(item.priceQty) > 0 ? Number(item.priceQty) : 1;
+  if (filledTotal) priced.totalAmount = round2(item.sellPrice * qtyInItemUnits / perQty);
+  if (filledCost) priced.costPrice = round2(item.costPrice * qtyInItemUnits / perQty);
   if (priced.costPrice != null && priced.totalAmount != null) {
     priced.profitAmount = round2(priced.totalAmount - priced.costPrice);
     priced.profitPercent = priced.costPrice > 0 ? round2((priced.profitAmount / priced.costPrice) * 100) : null;
@@ -346,9 +348,12 @@ async function parseWithAI(text) {
 }
 
 // ============ Regex parser (offline fallback) ============
-const UNITS = 'kg|kgs|kilogram|kilograms|kilo|kilos|keji|gram|grams|graam|gms|gm|g|dozen|darjan|pcs|pieces|piece|pees|pis|nag|ml|millilitre|millilitres|milliliter|milliliters|litre|litres|liter|liters|l|ser|seer|sher|pav|paav|poa|tola|thola|tol|ratti|chatak|chhatank|masha|vori|ennam|ennikkai|mukka|item|ta';
+const UNITS = 'kg|kgs|kilogram|kilograms|kilo|kilos|keji|gram|grams|graam|gms|gm|g|dozen|darjan|pcs|pieces|piece|pees|pis|pc|nag|ml|millilitre|millilitres|milliliter|milliliters|litre|litres|liter|liters|l|ser|seer|sher|pav|paav|poa|tola|thola|tol|ratti|chatak|chhatank|masha|vori|ennam|ennikkai|mukka|item|ta';
 
 const QUANTITY_RE = new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${UNITS})\\b`, 'i');
+// Bare number with no unit ("10 laddu chahiye") - only a quantity when an
+// order-intent word is present; price/profit/total numbers never qualify.
+const BARE_NUMBER_RE = /\b\d+(?:\.\d+)?\b/g;
 const UNIT_NOT_AFTER = new RegExp(`(?!\\s*(?:${UNITS})\\b)`, 'i');
 const COST_RE = /(?:total\s*)?(?:cost|cp|base\s*price|buying\s*price|price)\s*(?:of\s*[a-z ]+)?\s*(?:[=:]|is|are)?\s*(?:rs\.?|rupees|inr|\u20B9)?\s*(\d+(?:\.\d+)?)/i;
 const SOLD_FOR_RE = new RegExp(
@@ -471,7 +476,7 @@ const UNIT_NORMALIZE = {
   kg: 'kg', kgs: 'kg', kilogram: 'kg', kilograms: 'kg', kilo: 'kg', kilos: 'kg', keji: 'kg',
   gram: 'g', grams: 'g', graam: 'g', gms: 'g', gm: 'g', g: 'g',
   dozen: 'dozen', darjan: 'dozen',
-  pcs: 'pcs', pieces: 'pcs', piece: 'pcs', pees: 'pcs', pis: 'pcs', nag: 'pcs',
+  pcs: 'pcs', pieces: 'pcs', piece: 'pcs', pees: 'pcs', pis: 'pcs', pc: 'pcs', nag: 'pcs',
   ennam: 'pcs', ennikkai: 'pcs', mukka: 'pcs', item: 'pcs', ta: 'pcs',
   litre: 'l', litres: 'l', liter: 'l', liters: 'l', l: 'l',
   ml: 'ml', millilitre: 'ml', millilitres: 'ml', milliliter: 'ml', milliliters: 'ml',
@@ -479,7 +484,7 @@ const UNIT_NORMALIZE = {
   tola: 'g', thola: 'g', tol: 'g', ratti: 'g', chatak: 'g', chhatank: 'g', masha: 'g', vori: 'g',
 };
 
-const ITEM_TAIL_STOP = /\s+(?:mange|mangwaya|mangaye|chahiye|bhejo|bhejna|bhej|karo|krdo|please|ke\s+liye|pahije|pathva|banvun|kavali|beku|venam|venum|chahida|joie|kalisi|kaluhisi|anuppunga|pampandi|kudunga|tharu|pathan|din|dya|venam|bana do|bana dena|de do|de dena|bhej do|bhej dena|taiyar kar do|pack kar do|pathavun dya|banvun dya|pathiye din|baniye din|pack kore din|rekhe din|ready pannunga|pack pannunga|pampincheyandi|ivvandi|ready cheyandi|pack cheyandi|ready madi|pack madi|ittu kodi|madi kodi|ayachu tharu|ayach tharu|cheithu tharu|undakki tharu|pack cheythu|mokli do|mokli aapo|aapi do|banavi aapo|ready kari do|pack kari do|rakhi do|bhej deo|bana deo|de deo|tyaar kar deo|ready kar deo|pack kar deo|rakh deo|bhej dein|de dein|bana dein|tayyar kar dein|delivery kar do)\b.*$/i;
+const ITEM_TAIL_STOP = /\s+(?:mange|mangwaya|mangaye|chahiye|bhejo|bhejna|bhej|dena|dein|deo|karo|krdo|please|ke\s+liye|pahije|pathva|banvun|kavali|beku|venam|venum|chahida|joie|kalisi|kaluhisi|anuppunga|pampandi|kudunga|tharu|pathan|din|dya|venam|bana do|bana dena|de do|de dena|bhej do|bhej dena|taiyar kar do|pack kar do|pathavun dya|banvun dya|pathiye din|baniye din|pack kore din|rekhe din|ready pannunga|pack pannunga|pampincheyandi|ivvandi|ready cheyandi|pack cheyandi|ready madi|pack madi|ittu kodi|madi kodi|ayachu tharu|ayach tharu|cheithu tharu|undakki tharu|pack cheythu|mokli do|mokli aapo|aapi do|banavi aapo|ready kari do|pack kari do|rakhi do|bhej deo|bana deo|de deo|tyaar kar deo|ready kar deo|pack kar deo|rakh deo|bhej dein|de dein|bana dein|tayyar kar dein|delivery kar do)\b.*$/i;
 
 const toNum = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : null; };
 function titleCase(name) {
@@ -546,16 +551,44 @@ function matchQuantity(text) {
       match: fq,
     };
   }
+  // Bare number, no unit: "bhai 10 laddu chahiye". Numbers already claimed
+  // by a price/profit/total pattern ("cost 60", "total 230") never qualify.
+  const bare = matchBareNumber(text);
+  if (bare) return bare;
+  return null;
+}
+
+function matchBareNumber(text) {
+  const taken = [];
+  for (const re of [COST_RE, SOLD_FOR_RE, PROFIT_PCT_RE, PROFIT_PCT_WORD_RE, PROFIT_AMT_RE, TOTAL_RE]) {
+    const m = text.match(re);
+    if (m && m.index != null && m[1] != null) {
+      const at = m[0].indexOf(String(m[1]));
+      if (at >= 0) taken.push([m.index + at, m.index + at + String(m[1]).length]);
+    }
+  }
+  BARE_NUMBER_RE.lastIndex = 0;
+  let m;
+  while ((m = BARE_NUMBER_RE.exec(text))) {
+    const s = m.index, e = s + m[0].length;
+    if (taken.some(([a, b]) => s < b && e > a)) continue;
+    return { quantity: toNum(m[0]), unit: null, match: m, bare: true };
+  }
   return null;
 }
 
 function parseWithRegex(text) {
-  if (!text || !(ROMAN_INTENT_RE.test(text) || NATIVE_INTENT_RE.test(text))) return null;
+  if (!text) return null;
   const customer = extractCustomer(text);
   const qty = matchQuantity(text);
   const quantity = qty ? qty.quantity : null;
   const unit = qty ? qty.unit : null;
   const item = extractItem(text, qty ? qty.match : null);
+  const hasIntent = ROMAN_INTENT_RE.test(text) || NATIVE_INTENT_RE.test(text);
+  // A bare number ("10 laddu") counts only with an intent word ("chahiye") -
+  // without one it's too loose ("I have 10 laddu at home" is not an order).
+  const bareOrder = quantity != null && item != null && item.trim() !== '' && (!(qty && qty.bare) || hasIntent);
+  if (!hasIntent && !bareOrder) return null;
   let costPrice = null, totalAmount = null, profitPercent = null, profitAmount = null;
   const cm = text.match(COST_RE); if (cm) costPrice = toNum(cm[1]);
   const pd = text.match(PROFIT_PCT_RE);
@@ -870,10 +903,10 @@ async function startBot() {
         await client.message.send(chatJid, {
           type: 'text',
           text: pricedReply
+            // Customer-facing: cost/profit/margin are seller-confidential — send only confirmation + price.
             ? `✅ *ऑर्डर मिल गया!*\n` +
               `📦 ${rec.quantity ?? '—'}${rec.unit ? ' ' + rec.unit : ''} ${rec.item}\n` +
-              `💰 लागत: ₹${rec.costPrice ?? '—'} | मुनाफ़ा: ₹${rec.profitAmount ?? '—'}${rec.profitPercent != null ? ` (${rec.profitPercent}%)` : ''}\n` +
-              `🧾 कुल: ₹${rec.totalAmount ?? '—'}\n\nधन्यवाद! 🙏`
+              `🧾 कीमत: ₹${rec.totalAmount ?? '—'}\n\nधन्यवाद! 🙏`
             : `✅ *आपका ऑर्डर मिल गया!* ${rec.quantity ?? ''}${rec.unit ? ' ' + rec.unit : ''} ${rec.item}\n` +
               `🧾 कीमत जल्द ही कन्फर्म होगी। धन्यवाद! 🙏`,
           contextInfo: {
@@ -902,7 +935,7 @@ async function startBot() {
 }
 
 /** Vendor fills prices for a pending item -> save to catalog, re-price open orders. */
-function resolvePendingItem(pendingId, sellPrice, costPrice, unit, pieceWeight) {
+function resolvePendingItem(pendingId, sellPrice, costPrice, unit, pieceWeight, priceQty) {
   const list = loadPending();
   const p = list.find((x) => x.id === pendingId);
   if (!p) return null;
@@ -920,6 +953,8 @@ function resolvePendingItem(pendingId, sellPrice, costPrice, unit, pieceWeight) 
   if (unit) entry.unit = unit;
   const pw = Number(pieceWeight);
   if (Number.isFinite(pw) && pw > 0) entry.pieceWeight = pw;
+  const pq = Number(priceQty);
+  if (Number.isFinite(pq) && pq > 0) entry.priceQty = pq;
   if (!existing) items.unshift(entry);
   saveCatalog(items);
   savePending(list.filter((x) => x.id !== pendingId));
@@ -1012,6 +1047,10 @@ app.post('/api/catalog', auth, (req, res) => {
     const pw = Number(req.body.pieceWeight);
     entry.pieceWeight = Number.isFinite(pw) && pw > 0 ? pw : null;
   }
+  if (req.body?.priceQty != null) {
+    const pq = Number(req.body.priceQty);
+    entry.priceQty = Number.isFinite(pq) && pq > 0 ? pq : null;
+  }
   if (!existing) items.unshift(entry);
   saveCatalog(items);
   // Prices changed on an existing item -> fix orders the old price had miscalculated
@@ -1032,10 +1071,11 @@ app.post('/api/pending-pricing/:id/resolve', auth, (req, res) => {
   const costPrice = req.body?.costPrice != null ? Number(req.body.costPrice) : null;
   const unit = req.body?.unit != null ? String(req.body.unit) : null;
   const pieceWeight = req.body?.pieceWeight != null ? Number(req.body.pieceWeight) : null;
+  const priceQty = req.body?.priceQty != null ? Number(req.body.priceQty) : null;
   if (!Number.isFinite(sellPrice) || sellPrice <= 0) {
     return res.status(400).json({ error: 'sellPrice (number > 0) required' });
   }
-  const result = resolvePendingItem(req.params.id, sellPrice, costPrice, unit, pieceWeight);
+  const result = resolvePendingItem(req.params.id, sellPrice, costPrice, unit, pieceWeight, priceQty);
   if (!result) return res.status(404).json({ error: 'pending item not found' });
   res.json(result);
 });

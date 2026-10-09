@@ -224,11 +224,13 @@ async function startBot(onOrderRecorded) {
       if (process.env.AUTO_REPLY !== 'false') {
         await client.message.send(chatJid, {
           type: 'text',
-          text:
-            `✅ *Order tracked*\n` +
-            `📦 ${record.quantity ?? '-'}${record.unit ? ' ' + record.unit : ''} ${record.item}\n` +
-            `💰 Cost: ₹${record.costPrice ?? '-'} | Profit: ₹${record.profitAmount ?? '-'}${record.profitPercent != null ? ` (${record.profitPercent}%)` : ''}\n` +
-            `🧾 Total: ₹${record.totalAmount ?? '-'}`,
+          text: record.totalAmount != null
+            // Customer-facing: cost/profit are seller-confidential — confirmation + price only.
+            ? `✅ *Thanks for your order!*\n` +
+              `📦 ${record.quantity ?? '-'}${record.unit ? ' ' + record.unit : ''} ${record.item}\n` +
+              `🧾 Price: ₹${record.totalAmount}\n\n🙏`
+            : `✅ *Thanks for your order!* ${record.quantity ?? ''}${record.unit ? ' ' + record.unit : ''} ${record.item}\n` +
+              `🧾 Price will be confirmed soon. 🙏`,
           contextInfo: {
             quotedMessageId: key.id,
             quotedParticipant: key.participant || chatJid,

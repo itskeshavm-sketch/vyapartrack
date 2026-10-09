@@ -10,6 +10,12 @@ const cases = [
   'ravi kirana ne 5kg namkeen mange, cost 400, profit 18%',
   'hey how are you', // should be rejected
   'order from Aman, 12 pcs samosa, cost 60, profit 10', // profit as bare number without % -> may be treated as amount
+  '10 piece laddu',
+  '5pc laddu',
+  'bhai 10 laddu chahiye',
+  'bhai 500g sugar dena',
+  'I have 10 laddu at home', // bare number, no intent -> rejected
+  'samosa 12 rupees', // price only, no qty -> rejected
 ];
 
 let pass = 0;
@@ -54,6 +60,26 @@ for (const text of cases) {
     assert(r.quantity === 5 && r.unit === 'kg' && r.item === 'namkeen', '5kg namkeen');
     assert(r.profitAmount === 72 && r.totalAmount === 472, 'profit 72, total 472');
   }
+  if (text === '10 piece laddu') {
+    assert(r.quantity === 10 && r.unit === 'pcs' && r.item === 'laddu', '10 piece laddu');
+  }
+  if (text === '5pc laddu') {
+    assert(r.quantity === 5 && r.unit === 'pcs' && r.item === 'laddu', '5pc laddu');
+  }
+  if (text === 'bhai 10 laddu chahiye') {
+    assert(r.quantity === 10 && (r.unit == null) && r.item === 'laddu', 'bare 10 laddu + intent');
+  }
+  if (text === 'bhai 500g sugar dena') {
+    assert(r.quantity === 500 && r.unit === 'g' && r.item === 'sugar', '500g sugar');
+  }
+}
+
+const mustReject = ['hey how are you', 'I have 10 laddu at home', 'samosa 12 rupees'];
+for (const text of mustReject) {
+  const r = parseOrder(text);
+  console.log('\nMSG :', text);
+  console.log(r ? '->  PARSED (unexpected!)' : '->  rejected (not an order)');
+  assert(!r, `rejected: "${text}"`);
 }
 
 console.log(`\n=== Parser checks: ${pass} passed, ${fail} failed ===`);

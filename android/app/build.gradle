@@ -11,8 +11,8 @@ android {
         applicationId 'com.vyapartrack.app'
         minSdk 24
         targetSdk 34
-        versionCode 268
-        versionName '2.6.8'
+        versionCode 286
+        versionName '2.8.6-phone'
     }
 
     buildTypes {
@@ -27,5 +27,12 @@ android {
     }
 }
 
+// Native-script parser strings require UTF-8 source decoding.
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
 dependencies {
+    implementation files('libs/wabridge-classes.jar')
+    implementation 'org.nanohttpd:nanohttpd:2.3.1'
 }

@@ -2,7 +2,9 @@
 
 const $ = (id) => document.getElementById(id);
 const STORAGE_KEY = 'vyapartrack.orders.v1';
-const DEFAULT_SERVER_URL = 'https://constructed-chronicles-chair-urls.trycloudflare.com';
+// v2.7.0: engine runs ON this phone (foreground service on 127.0.0.1:3000).
+// Settings still lets you point at a remote server (e.g. the PC tunnel URL).
+const DEFAULT_SERVER_URL = 'http://127.0.0.1:3000';
 const DEFAULT_API_TOKEN = '44fff7e79de139a9e85b0e77c9c5017a0b84dac30978e4f6bf';
 
 let pollTimer = null;
@@ -24,8 +26,10 @@ function escapeHtml(s) {
 
 function getServerConfig() {
   return {
-    url: (localStorage.getItem('vyapartrack.server.url') || DEFAULT_SERVER_URL).replace(/\/+$/, ''),
-    token: localStorage.getItem('vyapartrack.server.token') || DEFAULT_API_TOKEN,
+    // .v3 suffix: fresh defaults for the on-phone engine build (old installs
+    // may have a stale tunnel URL saved under the previous key).
+    url: (localStorage.getItem('vyapartrack.server.url.v3') || DEFAULT_SERVER_URL).replace(/\/+$/, ''),
+    token: localStorage.getItem('vyapartrack.server.token.v3') || DEFAULT_API_TOKEN,
   };
 }
 
@@ -371,12 +375,14 @@ async function renderCatalog() {
   }
   const unitHi = { kg: 'किलो', g: 'ग्राम', ml: 'मिली', l: 'लीटर', pcs: 'पीस', dozen: 'दर्जन' };
   list.innerHTML = items.map((it) => {
-    const pw = it.pieceWeight ? ` · 1 पीस ≈ ${fmt.format(it.pieceWeight)} ग्राम` : '';
+    const pq = Number(it.priceQty) > 1 ? ` / ${fmt.format(it.priceQty)} ${unitHi[it.unit] || it.unit || ''}` : '';
+    const perUnit = round2((Number(it.priceQty) > 0 ? Number(it.priceQty) : 1));
+    const margin = (it.sellPrice != null && it.costPrice != null) ? fmt.format(round2((it.sellPrice - it.costPrice) / perUnit)) : '—';
     return `
     <div class="catalog-row">
       <div class="c-info">
-        <div class="c-name">${escapeHtml(it.name)} <span class="muted small">(${unitHi[it.unit] || it.unit || '—'}${pw})</span></div>
-        <div class="c-prices">बिक्री ₹${it.sellPrice ?? '—'} · खर्चा ₹${it.costPrice ?? '—'} → मुनाफ़ा ₹${(it.sellPrice != null && it.costPrice != null) ? fmt.format(round2(it.sellPrice - it.costPrice)) : '—'}</div>
+        <div class="c-name">${escapeHtml(it.name)} <span class="muted small">(${unitHi[it.unit] || it.unit || '—'} प्रति)</span></div>
+        <div class="c-prices">बिक्री ₹${it.sellPrice ?? '—'}${pq} · खर्चा ₹${it.costPrice ?? '—'}${pq} → मुनाफ़ा ₹${margin}/unit</div>
       </div>
       <button class="c-del" data-id="${it.id}" title="हटाएं">✕</button>
     </div>`;
@@ -388,29 +394,48 @@ $('catalogList').addEventListener('click', async (e) => {
   try { await serverFetch('/api/catalog/' + btn.dataset.id, { method: 'DELETE' }); } catch {}
   renderCatalog();
 });
-function togglePieceWeight() {
-  const isPcs = $('catalogUnit').value === 'pcs' || $('catalogUnit').value === 'dozen';
-  $('catalogPieceWeight').classList.toggle('hidden', !isPcs);
+// Catalog flow (all Hindi): unit -> "कितना/कितने?" on top -> money questions use N.
+// e.g. ml + 100 -> "100 मिली कितने में बेचते हैं?" / "100 मिली में कितना खर्चा?"
+const UNIT_HI_SHORT = { pcs: 'पीस', dozen: 'दर्जन', g: 'ग्राम', kg: 'किलो', ml: 'मिली', l: 'लीटर' };
+function catalogQtyN() {
+  const n = parseFloat($('catalogPerQty').value);
+  return Number.isFinite(n) && n > 0 ? n : 1;
 }
-$('catalogUnit').addEventListener('change', togglePieceWeight);
+function fmtN(n) { return n === Math.floor(n) ? String(n) : String(Math.round(n * 100) / 100); }
+function updateCatalogHints() {
+  const u = $('catalogUnit').value;
+  const hi = UNIT_HI_SHORT[u] || u;
+  const kitna = (u === 'pcs' || u === 'dozen') ? 'कितने' : 'कितना';
+  const n = catalogQtyN();
+  const ntxt = fmtN(n) + ' ' + hi;
+  $('perQtyLbl').textContent = `${kitna} ${hi}?`;
+  $('catalogPerQty').placeholder = 'जैसे 100';
+  $('sellLbl').textContent = `${ntxt} कितने में बेचते हैं?`;
+  $('catalogSell').placeholder = `जैसे 20 (₹)`;
+  $('costLbl').textContent = `${ntxt} में कितना खर्चा?`;
+  $('catalogCost').placeholder = `जैसे 5 (₹)`;
+  $('catalogUnitHint').innerHTML = `पहले <b>${kitna} ${hi}</b> बताएँ, फिर उसी की कीमत — जैसे पानी: 100 मिली → ₹20 बेचने, ₹5 खर्चा।`;
+}
+$('catalogUnit').addEventListener('change', updateCatalogHints);
+$('catalogPerQty').addEventListener('input', updateCatalogHints);
 // Trigger once at load in case the select defaults sensibly
-togglePieceWeight();
+updateCatalogHints();
 $('catalogForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const name = $('catalogName').value.trim();
   const unit = $('catalogUnit').value;
   const sellPrice = parseFloat($('catalogSell').value);
   const costPrice = $('catalogCost').value ? parseFloat($('catalogCost').value) : null;
-  const pwRaw = $('catalogPieceWeight').value;
-  const pieceWeight = pwRaw ? parseFloat(pwRaw) : null;
+  const priceQty = catalogQtyN();
   if (!name || !Number.isFinite(sellPrice)) return;
   try {
     await serverFetch('/api/catalog', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, unit, sellPrice, costPrice, pieceWeight }),
+      body: JSON.stringify({ name, unit, sellPrice, costPrice, priceQty }),
     });
-    $('catalogName').value = ''; $('catalogSell').value = ''; $('catalogCost').value = ''; $('catalogPieceWeight').value = '';
+    $('catalogName').value = ''; $('catalogSell').value = ''; $('catalogCost').value = ''; $('catalogPerQty').value = '';
+    updateCatalogHints();
     renderCatalog();
     refreshPending();
   } catch (err) { alert('⚠ ' + err.message); }
@@ -428,7 +453,6 @@ async function refreshPending() {
   $('pendingCount').textContent = items.length + ' आइटम';
   const unitHi = { kg: 'किलो', g: 'ग्राम', ml: 'मिली', l: 'लीटर', pcs: 'पीस', dozen: 'दर्जन' };
   $('pendingList').innerHTML = items.map((p) => {
-    const showPw = p.unit === 'pcs' || p.unit === 'dozen' || !p.unit;
     return `
     <div class="pending-item" data-id="${p.id}">
       <div class="pi-info">
@@ -437,7 +461,6 @@ async function refreshPending() {
       </div>
       <input class="pi-sell" type="number" inputmode="decimal" min="0" placeholder="बिक्री ₹" />
       <input class="pi-cost" type="number" inputmode="decimal" min="0" placeholder="खर्चा ₹" />
-      <input class="pi-pw ${showPw ? '' : 'hidden'}" type="number" inputmode="decimal" min="0" placeholder="1 पीस = ? ग्राम" />
       <button class="pi-save">सेव</button>
     </div>`;
   }).join('');
@@ -449,73 +472,188 @@ $('pendingList').addEventListener('click', async (e) => {
   const sellPrice = parseFloat(row.querySelector('.pi-sell').value);
   const costRaw = row.querySelector('.pi-cost').value;
   const costPrice = costRaw ? parseFloat(costRaw) : null;
-  const pwEl = row.querySelector('.pi-pw');
-  const pwRaw = pwEl && !pwEl.classList.contains('hidden') && pwEl.value ? pwEl.value : null;
-  const pieceWeight = pwRaw ? parseFloat(pwRaw) : null;
   if (!Number.isFinite(sellPrice) || sellPrice <= 0) { alert('पहले बिक्री कीमत भरें'); return; }
   btn.disabled = true;
   try {
     await serverFetch('/api/pending-pricing/' + row.dataset.id + '/resolve', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sellPrice, costPrice, pieceWeight }),
+      body: JSON.stringify({ sellPrice, costPrice }),
     });
     await pollOnce();
   } catch (err) { alert('⚠ ' + err.message); }
   finally { btn.disabled = false; }
 });
 
-// ============ Settings ============
+// ============ Reports (📊 बिक्री रिपोर्ट — offline SVG, no libraries) ============
+let reportRange = '7';
+function openReports() {
+  $('reportsModal').classList.remove('hidden');
+  renderReports();
+}
+function closeReports() { $('reportsModal').classList.add('hidden'); }
+$('reportsBtn').addEventListener('click', openReports);
+$('reportsCloseBtn').addEventListener('click', closeReports);
+$('reportChips').addEventListener('click', (e) => {
+  const chip = e.target.closest('.chip');
+  if (!chip) return;
+  document.querySelectorAll('#reportChips .chip').forEach((c) => c.classList.remove('active'));
+  chip.classList.add('active');
+  reportRange = chip.dataset.range;
+  $('customRange').classList.toggle('hidden', reportRange !== 'custom');
+  renderReports();
+});
+$('reportApply').addEventListener('click', renderReports);
+
+function reportWindow() {
+  const now = new Date();
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  if (reportRange === 'all') return { start: new Date(0), end, label: 'सभी ऑर्डर' };
+  if (reportRange === 'custom') {
+    const f = $('reportFrom').value, t = $('reportTo').value;
+    const start = f ? new Date(f + 'T00:00:00') : new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
+    const e2 = t ? new Date(t + 'T23:59:59') : end;
+    return { start, end: e2, label: `${start.toLocaleDateString('en-IN')} → ${e2.toLocaleDateString('en-IN')}` };
+  }
+  const days = parseInt(reportRange, 10) || 7;
+  const start = new Date(end.getTime() - (days - 1) * 86400000);
+  start.setHours(0, 0, 0, 0);
+  const lbl = days === 7 ? 'पिछले 7 दिन' : days === 30 ? 'पिछले 30 दिन' : days === 365 ? 'पिछला 1 साल' : `पिछले ${days} दिन`;
+  return { start, end, label: lbl };
+}
+
+const PIE_BY_THEME = {
+  midnight: ['#2fbf71', '#f5c66b', '#c9b8ff', '#6ec5ff', '#ff9d8a', '#7fe0ae', '#e08ac9'],
+  bazaar: ['#c0392b', '#e8930c', '#1d7a4c', '#8a6d3b', '#d35400', '#7d3c98', '#2e86c1'],
+  munim: ['#1d7a4c', '#4cc07a', '#e8930c', '#2e86c1', '#7d3c98', '#5f7268', '#c0392b'],
+};
+const THEME_KEY = 'vyapartrack.theme.v1';
+function getTheme() { return localStorage.getItem(THEME_KEY) || 'midnight'; }
+function applyTheme(t) {
+  document.body.dataset.theme = t;
+  try { localStorage.setItem(THEME_KEY, t); } catch {}
+  document.querySelectorAll('#themeChips .chip').forEach((c) => c.classList.toggle('active', c.dataset.theme === t));
+}
+$('themeChips').addEventListener('click', (e) => {
+  const chip = e.target.closest('.chip');
+  if (!chip) return;
+  applyTheme(chip.dataset.theme);
+  if (!$('reportsModal').classList.contains('hidden')) renderReports();
+});
+
+function renderReports() {
+  const orders = loadLocalOrders();
+  const { start, end, label } = reportWindow();
+  const rows = orders.filter((o) => {
+    const t = new Date(o.timestamp).getTime();
+    return Number.isFinite(t) && t >= start.getTime() && t <= end.getTime();
+  });
+  $('reportScope').textContent = `${label} · ${rows.length} ऑर्डर`;
+  let revenue = 0, cost = 0, profit = 0;
+  const byCust = {};
+  const byDay = {};
+  for (const o of rows) {
+    if (o.totalAmount != null) revenue += o.totalAmount;
+    if (o.costPrice != null) cost += o.costPrice;
+    if (o.profitAmount != null) profit += o.profitAmount;
+    const c = o.customer || 'Unknown';
+    byCust[c] = byCust[c] || { revenue: 0, profit: 0, orders: 0 };
+    if (o.totalAmount != null) byCust[c].revenue += o.totalAmount;
+    if (o.profitAmount != null) byCust[c].profit += o.profitAmount;
+    byCust[c].orders += 1;
+    const d = new Date(o.timestamp);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    byDay[key] = byDay[key] || { revenue: 0, profit: 0 };
+    if (o.totalAmount != null) byDay[key].revenue += o.totalAmount;
+    if (o.profitAmount != null) byDay[key].profit += o.profitAmount;
+  }
+  $('reportKpis').innerHTML = `
+    <div class="kpi green"><span class="k-lbl">कमाई</span><span class="k-val">${money(round2(revenue))}</span></div>
+    <div class="kpi violet"><span class="k-lbl">खर्चा</span><span class="k-val">${money(round2(cost))}</span></div>
+    <div class="kpi gold"><span class="k-lbl">मुनाफ़ा</span><span class="k-val">${money(round2(profit))}</span></div>
+    <div class="kpi"><span class="k-lbl">ऑर्डर</span><span class="k-val">${fmt.format(rows.length)}</span></div>`;
+
+  // --- Donut: customer share of revenue ---
+  const PIE_COLORS = PIE_BY_THEME[getTheme()] || PIE_BY_THEME.midnight;
+  const custs = Object.entries(byCust).sort((a, b) => b[1].revenue - a[1].revenue);
+  const pieBox = $('reportPie'), legBox = $('reportPieLegend');
+  if (!custs.length || revenue <= 0) {
+    pieBox.innerHTML = '<div class="empty">इस अवधि में कोई बिक्री नहीं।</div>';
+    legBox.innerHTML = '';
+  } else {
+    const top = custs.slice(0, 6);
+    const rest = custs.slice(6);
+    if (rest.length) top.push(['अन्य', { revenue: rest.reduce((s, [, v]) => s + v.revenue, 0), profit: 0, orders: rest.reduce((s, [, v]) => s + v.orders, 0) }]);
+    const R = 54, C = 2 * Math.PI * R;
+    let off = 25;
+    const segs = top.map(([name, v], i) => {
+      const frac = v.revenue / revenue;
+      const s = `<circle cx="70" cy="70" r="${R}" fill="none" stroke="${PIE_COLORS[i % PIE_COLORS.length]}" stroke-width="22" stroke-dasharray="${(frac * C).toFixed(1)} ${C.toFixed(1)}" stroke-dashoffset="${(-off / 100 * C).toFixed(1)}" />`;
+      off += frac * 100;
+      return s;
+    }).join('');
+    pieBox.innerHTML = `<svg viewBox="0 0 140 140" class="donut">${segs}<text x="70" y="66" text-anchor="middle" class="donut-num">${fmt.format(rows.length)}</text><text x="70" y="84" text-anchor="middle" class="donut-lbl">ऑर्डर</text></svg>`;
+    legBox.innerHTML = top.map(([name, v], i) =>
+      `<div class="leg-row"><span class="dot" style="background:${PIE_COLORS[i % PIE_COLORS.length]}"></span><span class="leg-name">${escapeHtml(name)}</span><span class="leg-val">${Math.round(v.revenue / revenue * 100)}% · ${money(round2(v.revenue))}</span></div>`
+    ).join('');
+  }
+
+  // --- Bars: per-day revenue (green) with profit (gold) overlay ---
+  const days = Object.keys(byDay).sort();
+  const barBox = $('reportBars');
+  const buckets = days.length > 14
+    ? Object.entries(byDay).reduce((acc, [k, v]) => {
+        const d = new Date(k + 'T00:00:00');
+        const wk = `${d.getFullYear()}-W${Math.ceil(d.getDate() / 7)}-${d.getMonth() + 1}`;
+        acc[wk] = acc[wk] || { revenue: 0, profit: 0, label: k.slice(5) };
+        acc[wk].revenue += v.revenue; acc[wk].profit += v.profit;
+        return acc;
+      }, {})
+    : Object.fromEntries(days.map((k) => [k, { ...byDay[k], label: k.slice(5) }]));
+  const bvals = Object.values(buckets);
+  if (!bvals.length) {
+    barBox.innerHTML = '<div class="empty">इस अवधि में कोई बिक्री नहीं।</div>';
+  } else {
+    const max = Math.max(...bvals.map((b) => b.revenue), 1);
+    barBox.innerHTML = '<div class="bars">' + Object.entries(buckets).map(([k, b]) => `
+      <div class="bar-col" title="${k}: कमाई ${money(round2(b.revenue))}, मुनाफ़ा ${money(round2(b.profit))}">
+        <div class="bar-track">
+          <div class="bar-rev" style="height:${Math.max(3, b.revenue / max * 100)}%"></div>
+          <div class="bar-prof" style="height:${b.revenue > 0 ? Math.max(0, Math.min(100, b.profit / max * 100)) : 0}%"></div>
+        </div>
+        <div class="bar-lbl">${b.label}</div>
+      </div>`).join('') + '</div><p class="muted small">🟩 कमाई &nbsp; 🟨 मुनाफ़ा (बार पर टैप/होवर करें)</p>';
+  }
+
+  // --- Best customers ---
+  const best = custs.slice(0, 5);
+  $('reportBest').innerHTML = best.length
+    ? best.map(([name, v], i) => `
+      <div class="best-row">
+        <span class="best-rank">${['🥇', '🥈', '🥉', '4.', '5.'][i]}</span>
+        <span class="best-name">${escapeHtml(name)}<small>${v.orders} ऑर्डर</small></span>
+        <span class="best-val">${money(round2(v.revenue))}<small>मुनाफ़ा ${money(round2(v.profit))}</small></span>
+      </div>`).join('')
+    : '<div class="empty">अभी कोई ग्राहक नहीं।</div>';
+}
+
+// ============ Settings (theme only) ============
 function openSettings() {
-  const c = getServerConfig();
-  $('serverUrlInput').value = c.url;
-  $('apiTokenInput').value = c.token;
-  $('settingsTest').classList.add('hidden');
+  applyTheme(getTheme());
   $('settingsModal').classList.remove('hidden');
 }
 function closeSettings() { $('settingsModal').classList.add('hidden'); }
 $('settingsBtn').addEventListener('click', openSettings);
 $('settingsCloseBtn').addEventListener('click', closeSettings);
-$('settingsSaveBtn').addEventListener('click', () => {
-  localStorage.setItem('vyapartrack.server.url', $('serverUrlInput').value.trim());
-  localStorage.setItem('vyapartrack.server.token', $('apiTokenInput').value.trim());
-  closeSettings();
-  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-  startPolling();
-});
-$('settingsTestBtn').addEventListener('click', async () => {
-  const box = $('settingsTest');
-  box.className = 'result';
-  box.textContent = 'Testing…';
-  box.classList.remove('hidden');
-  localStorage.setItem('vyapartrack.server.url', $('serverUrlInput').value.trim());
-  localStorage.setItem('vyapartrack.server.token', $('apiTokenInput').value.trim());
-  try {
-    const s = await serverFetch('/api/status');
-    box.className = 'result ok';
-    box.textContent = `✅ जुड़ा — WhatsApp: ${s.connected ? 'जुड़ा' : (s.lastError || 'इंतज़ार')} · AI: ${s.aiConfigured ? 'चालू' : 'बंद'}`;
-  } catch (err) {
-    box.className = 'result err';
-    box.textContent = '⚠ ' + err.message;
-  }
-});
-$('settingsDiagnoseBtn')?.addEventListener('click', async () => {
-  const box = $('settingsTest');
-  box.className = 'result';
-  box.textContent = 'Running diagnostics…';
-  box.classList.remove('hidden');
-  localStorage.setItem('vyapartrack.server.url', $('serverUrlInput').value.trim());
-  localStorage.setItem('vyapartrack.server.token', $('apiTokenInput').value.trim());
-  const results = await diagnose();
-  const lines = results.map((r) => r.ok ? `✅ ${r.label}` : `❌ ${r.label} — ${r.err}`);
-  box.className = 'result ' + (results.every((r) => r.ok) ? 'ok' : 'err');
-  box.textContent = lines.join('\n');
-});
 
 // ============ Local regex parser (offline fallback) ============
-const UNITS = 'kg|kgs|kilogram|kilograms|kilo|kilos|keji|gram|grams|graam|gms|gm|g|dozen|darjan|pcs|pieces|piece|pees|pis|nag|ml|millilitre|millilitres|milliliter|milliliters|litre|litres|liter|liters|l|ser|seer|sher|pav|paav|poa|tola|thola|tol|ratti|chatak|chhatank|masha|vori|ennam|ennikkai|mukka|item|ta';
+const UNITS = 'kg|kgs|kilogram|kilograms|kilo|kilos|keji|gram|grams|graam|gms|gm|g|dozen|darjan|pcs|pieces|piece|pees|pis|pc|nag|ml|millilitre|millilitres|milliliter|milliliters|litre|litres|liter|liters|l|ser|seer|sher|pav|paav|poa|tola|thola|tol|ratti|chatak|chhatank|masha|vori|ennam|ennikkai|mukka|item|ta';
 
 const QUANTITY_RE = new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${UNITS})\\b`, 'i');
+// Bare number with no unit ("10 laddu chahiye") - only a quantity when an
+// order-intent word is present; price/profit/total numbers never qualify.
+const BARE_NUMBER_RE = /\b\d+(?:\.\d+)?\b/g;
+
 const UNIT_NOT_AFTER = new RegExp(`(?!\\s*(?:${UNITS})\\b)`, 'i');
 const COST_RE = /(?:total\s*)?(?:cost|cp|base\s*price|buying\s*price|price)\s*(?:of\s*[a-z ]+)?\s*(?:[=:]|is|are)?\s*(?:rs\.?|rupees|inr|\u20B9)?\s*(\d+(?:\.\d+)?)/i;
 const SOLD_FOR_RE = new RegExp(
@@ -638,7 +776,7 @@ const UNIT_NORMALIZE = {
   kg: 'kg', kgs: 'kg', kilogram: 'kg', kilograms: 'kg', kilo: 'kg', kilos: 'kg', keji: 'kg',
   gram: 'g', grams: 'g', graam: 'g', gms: 'g', gm: 'g', g: 'g',
   dozen: 'dozen', darjan: 'dozen',
-  pcs: 'pcs', pieces: 'pcs', piece: 'pcs', pees: 'pcs', pis: 'pcs', nag: 'pcs',
+  pcs: 'pcs', pieces: 'pcs', piece: 'pcs', pees: 'pcs', pis: 'pcs', pc: 'pcs', nag: 'pcs',
   ennam: 'pcs', ennikkai: 'pcs', mukka: 'pcs', item: 'pcs', ta: 'pcs',
   litre: 'l', litres: 'l', liter: 'l', liters: 'l', l: 'l',
   ml: 'ml', millilitre: 'ml', millilitres: 'ml', milliliter: 'ml', milliliters: 'ml',
@@ -646,7 +784,7 @@ const UNIT_NORMALIZE = {
   tola: 'g', thola: 'g', tol: 'g', ratti: 'g', chatak: 'g', chhatank: 'g', masha: 'g', vori: 'g',
 };
 
-const ITEM_TAIL_STOP = /\s+(?:mange|mangwaya|mangaye|chahiye|bhejo|bhejna|bhej|karo|krdo|please|ke\s+liye|pahije|pathva|banvun|kavali|beku|venam|venum|chahida|joie|kalisi|kaluhisi|anuppunga|pampandi|kudunga|tharu|pathan|din|dya|venam|bana do|bana dena|de do|de dena|bhej do|bhej dena|taiyar kar do|pack kar do|pathavun dya|banvun dya|pathiye din|baniye din|pack kore din|rekhe din|ready pannunga|pack pannunga|pampincheyandi|ivvandi|ready cheyandi|pack cheyandi|ready madi|pack madi|ittu kodi|madi kodi|ayachu tharu|ayach tharu|cheithu tharu|undakki tharu|pack cheythu|mokli do|mokli aapo|aapi do|banavi aapo|ready kari do|pack kari do|rakhi do|bhej deo|bana deo|de deo|tyaar kar deo|ready kar deo|pack kar deo|rakh deo|bhej dein|de dein|bana dein|tayyar kar dein|delivery kar do)\b.*$/i;
+const ITEM_TAIL_STOP = /\s+(?:mange|mangwaya|mangaye|chahiye|bhejo|bhejna|bhej|dena|dein|deo|karo|krdo|please|ke\s+liye|pahije|pathva|banvun|kavali|beku|venam|venum|chahida|joie|kalisi|kaluhisi|anuppunga|pampandi|kudunga|tharu|pathan|din|dya|venam|bana do|bana dena|de do|de dena|bhej do|bhej dena|taiyar kar do|pack kar do|pathavun dya|banvun dya|pathiye din|baniye din|pack kore din|rekhe din|ready pannunga|pack pannunga|pampincheyandi|ivvandi|ready cheyandi|pack cheyandi|ready madi|pack madi|ittu kodi|madi kodi|ayachu tharu|ayach tharu|cheithu tharu|undakki tharu|pack cheythu|mokli do|mokli aapo|aapi do|banavi aapo|ready kari do|pack kari do|rakhi do|bhej deo|bana deo|de deo|tyaar kar deo|ready kar deo|pack kar deo|rakh deo|bhej dein|de dein|bana dein|tayyar kar dein|delivery kar do)\b.*$/i;
 
 const toNum = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : null; };
 function titleCase(name) { return name.toLowerCase().split(/\s+/).filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1)).join(' '); }
@@ -711,16 +849,44 @@ function matchQuantity(text) {
       match: fq,
     };
   }
+  // Bare number, no unit: "bhai 10 laddu chahiye". Numbers already claimed
+  // by a price/profit/total pattern ("cost 60", "total 230") never qualify.
+  const bare = matchBareNumber(text);
+  if (bare) return bare;
+  return null;
+}
+
+function matchBareNumber(text) {
+  const taken = [];
+  for (const re of [COST_RE, SOLD_FOR_RE, PROFIT_PCT_RE, PROFIT_PCT_WORD_RE, PROFIT_AMT_RE, TOTAL_RE]) {
+    const m = text.match(re);
+    if (m && m.index != null && m[1] != null) {
+      const at = m[0].indexOf(String(m[1]));
+      if (at >= 0) taken.push([m.index + at, m.index + at + String(m[1]).length]);
+    }
+  }
+  BARE_NUMBER_RE.lastIndex = 0;
+  let m;
+  while ((m = BARE_NUMBER_RE.exec(text))) {
+    const s = m.index, e = s + m[0].length;
+    if (taken.some(([a, b]) => s < b && e > a)) continue;
+    return { quantity: toNum(m[0]), unit: null, match: m, bare: true };
+  }
   return null;
 }
 
 function localParse(text) {
-  if (!text || !(ROMAN_INTENT_RE.test(text) || NATIVE_INTENT_RE.test(text))) return null;
+  if (!text) return null;
   const customer = extractCustomer(text);
   const qty = matchQuantity(text);
   const quantity = qty ? qty.quantity : null;
   const unit = qty ? qty.unit : null;
   const item = extractItem(text, qty ? qty.match : null);
+  const hasIntent = ROMAN_INTENT_RE.test(text) || NATIVE_INTENT_RE.test(text);
+  // A bare number ("10 laddu") counts only with an intent word ("chahiye") -
+  // without one it's too loose ("I have 10 laddu at home" is not an order).
+  const bareOrder = quantity != null && item != null && item.trim() !== '' && (!(qty && qty.bare) || hasIntent);
+  if (!hasIntent && !bareOrder) return null;
   let costPrice = null, totalAmount = null, profitPercent = null, profitAmount = null;
   const cm = text.match(COST_RE); if (cm) costPrice = toNum(cm[1]);
   const pd = text.match(PROFIT_PCT_RE); const pw = text.match(PROFIT_PCT_WORD_RE);
@@ -774,6 +940,7 @@ async function diagnose() {
 }
 
 async function init() {
+  applyTheme(getTheme());
   renderAll();
   // Show the dashboard immediately — never a blank screen while the
   // (possibly sleeping) server wakes up.

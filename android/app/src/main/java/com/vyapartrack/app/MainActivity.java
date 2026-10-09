@@ -4,7 +4,9 @@ import android.app.Activity;
 import android.content.Intent;
 import android.graphics.Color;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.view.View;
 import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
@@ -70,6 +72,53 @@ public class MainActivity extends Activity {
         setContentView(root);
 
         webView.loadUrl("file:///android_asset/dashboard/index.html");
+
+        // Keep the WhatsApp engine + localhost API alive while the app is closed.
+        ensureNotificationPermission();
+        try {
+            startForegroundService(new Intent(this, VyaparService.class));
+        } catch (Exception e) {
+            Toast.makeText(this, "Engine start failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+        requestIgnoreBatteryOptimizations();
+    }
+
+    /** Android 13+ requires a runtime grant for the service's status notification;
+     *  READ_CONTACTS gives the engine saved names (whatsmeow has no address-book sync). */
+    private void ensureNotificationPermission() {
+        java.util.List<String> needed = new java.util.ArrayList<>();
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission("android.permission.POST_NOTIFICATIONS")
+                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            needed.add("android.permission.POST_NOTIFICATIONS");
+        }
+        if (checkSelfPermission("android.permission.READ_CONTACTS")
+                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            needed.add("android.permission.READ_CONTACTS");
+        }
+        if (!needed.isEmpty()) requestPermissions(needed.toArray(new String[0]), 100);
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
+        super.onRequestPermissionsResult(requestCode, permissions, results);
+        for (int i = 0; i < permissions.length; i++) {
+            if ("android.permission.READ_CONTACTS".equals(permissions[i])
+                    && results[i] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                ContactNames.invalidate(); // retry the (previously failed/denied) load now
+            }
+        }
+    }
+
+    /** OEM battery killers are the #1 way an on-phone engine dies - ask once. */
+    private void requestIgnoreBatteryOptimizations() {
+        try {
+            if (!getSystemService(android.os.PowerManager.class).isIgnoringBatteryOptimizations(getPackageName())) {
+                startActivity(new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                        Uri.parse("package:" + getPackageName())));
+            }
+        } catch (Exception e) {
+            // Some OEMs hide the intent - user must exempt manually in settings.
+        }
     }
 
     @Override
@@ -141,6 +190,23 @@ public class MainActivity extends Activity {
             } catch (Exception e) {
                 runOnUiThread(() -> Toast.makeText(MainActivity.this,
                         "Could not open WhatsApp", Toast.LENGTH_SHORT).show());
+            }
+        }
+
+        /** Generic text share (log diagnostics etc.) - no WhatsApp dependency. */
+        @JavascriptInterface
+        public void shareText(String text) {
+            if (text == null || text.length() == 0) return;
+            try {
+                Intent send = new Intent(Intent.ACTION_SEND);
+                send.setType("text/plain");
+                send.putExtra(Intent.EXTRA_TEXT, text);
+                Intent chooser = Intent.createChooser(send, "Share");
+                chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(chooser);
+            } catch (Exception e) {
+                runOnUiThread(() -> Toast.makeText(MainActivity.this,
+                        "No app available to share", Toast.LENGTH_SHORT).show());
             }
         }
 

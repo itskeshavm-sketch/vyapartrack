@@ -10,6 +10,15 @@
     <!-- Needed for the Poolside AI parser to call its inference endpoint. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- On-phone WhatsApp engine: foreground service keeps whatsmeow alive. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- whatsmeow doesn't sync the address book; names come from the phone's contacts. -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+
     <application
         android:label="VyaparTrack"
         android:icon="@mipmap/ic_launcher"
@@ -27,5 +36,10 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <service
+            android:name=".VyaparService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
     </application>
 </manifest>

@@ -60,6 +60,7 @@
           <p id="connStatus">जुड़ रहे हैं…</p>
         </div>
       </div>
+      <button id="reportsBtn" class="icon-btn" title="रिपोर्ट / हिसाब">📊</button>
       <button id="catalogBtn" class="icon-btn" title="आइटम / Items">🛒</button>
       <button id="settingsBtn" class="icon-btn" title="सेटिंग्स">⚙</button>
     </header>
@@ -103,7 +104,7 @@
       </div>
     </section>
 
-    <footer>v2.6.4 · पेयरिंग फिक्स · पीस वज़न · ठीक कीमत पर ऑर्डर अपने आप सुधरेंगे</footer>
+    <footer>v2.8.6 · ऑन-फ़ोन इंजन · WhatsApp इसी फ़ोन पर चलता है</footer>
   </div>
 
   <!-- ================== CATALOG MODAL ================== -->
@@ -113,28 +114,62 @@
         <h2>🛒 मेरे आइटम</h2>
         <button class="icon-btn" id="catalogCloseBtn">✕</button>
       </div>
-      <p class="muted small pad-x">जो बेचते हैं उसकी कीमत और खर्चा भरें। ऑर्डर आते ही कैलकुलेशन अपने आप होगी।</p>
+      <p class="muted small pad-x">जो बेचते हैं उसकी कीमत भरें। ऑर्डर आते ही कैलकुलेशन अपने आप होगी।</p></p>
       <div id="catalogList" class="catalog-list"></div>
       <div class="divider"></div>
       <h3 class="pad-x">नया आइटम</h3>
       <form id="catalogForm" class="catalog-form">
         <input id="catalogName" type="text" placeholder="आइटम का नाम (जैसे लड्डू)" required />
-        <div class="triple-row">
-          <select id="catalogUnit">
-            <option value="g">ग्राम (g)</option>
-            <option value="kg">किलो (kg)</option>
-            <option value="ml">मिली (ml)</option>
-            <option value="l">लीटर (l)</option>
-            <option value="pcs">पीस (pcs)</option>
-            <option value="dozen">दर्जन</option>
-          </select>
-          <input id="catalogSell" type="number" inputmode="decimal" min="0" placeholder="बेचने ₹" required />
-          <input id="catalogCost" type="number" inputmode="decimal" min="0" placeholder="खर्चा ₹" />
-        </div>
-        <input id="catalogPieceWeight" type="number" inputmode="decimal" min="0"
-               placeholder="1 पीस = कितने ग्राम? (जैसे 1 लड्डू = 50)" class="hidden" />
+        <label class="fld-lbl">इकाई चुनें</label>
+        <select id="catalogUnit">
+          <option value="g">ग्राम (g)</option>
+          <option value="kg">किलो (kg)</option>
+          <option value="ml">मिली (ml)</option>
+          <option value="l">लीटर (l)</option>
+          <option value="pcs">पीस (pcs)</option>
+          <option value="dozen">दर्जन</option>
+        </select>
+        <label class="fld-lbl" id="perQtyLbl">कितना?</label>
+        <input id="catalogPerQty" type="number" inputmode="decimal" min="0" placeholder="जैसे 100" />
+        <label class="fld-lbl" id="sellLbl">बेचने की कीमत</label>
+        <input id="catalogSell" type="number" inputmode="decimal" min="0" placeholder="₹" required />
+        <label class="fld-lbl" id="costLbl">खर्चा (आपका)</label>
+        <input id="catalogCost" type="number" inputmode="decimal" min="0" placeholder="₹" />
+        <p class="muted small pad-x" id="catalogUnitHint"></p>
         <button type="submit" class="btn-primary">जोड़ें</button>
       </form>
+    </div>
+  </div>
+
+  <!-- ================== REPORTS MODAL ================== -->
+  <div id="reportsModal" class="modal hidden">
+    <div class="modal-card">
+      <div class="card-head">
+        <h2>📊 बिक्री रिपोर्ट</h2>
+        <button class="icon-btn" id="reportsCloseBtn">✕</button>
+      </div>
+      <div class="chips pad-x" id="reportChips">
+        <button class="chip active" data-range="7">सप्ताह</button>
+        <button class="chip" data-range="30">महीना</button>
+        <button class="chip" data-range="365">साल</button>
+        <button class="chip" data-range="all">सब</button>
+        <button class="chip" data-range="custom">📅 तारीख चुनें</button>
+      </div>
+      <div class="pad-x custom-range hidden" id="customRange">
+        <input id="reportFrom" type="date" />
+        <span class="muted">→</span>
+        <input id="reportTo" type="date" />
+        <button id="reportApply" class="btn-primary small-btn">देखें</button>
+      </div>
+      <p class="muted small pad-x" id="reportScope"></p>
+      <div class="kpi-grid pad-x" id="reportKpis"></div>
+      <h3 class="pad-x">👥 किसने कितना खरीदा (कमाई %)</h3>
+      <div class="pad-x chart-wrap" id="reportPie"></div>
+      <div class="legend pad-x" id="reportPieLegend"></div>
+      <h3 class="pad-x">📈 दिन-हिसाब (कमाई vs मुनाफ़ा)</h3>
+      <div class="pad-x chart-wrap" id="reportBars"></div>
+      <h3 class="pad-x">🏆 सबसे अच्छे ग्राहक</h3>
+      <div class="pad-x" id="reportBest"></div>
     </div>
   </div>
 
@@ -145,17 +180,13 @@
         <h2>सेटिंग्स</h2>
         <button class="icon-btn" id="settingsCloseBtn">✕</button>
       </div>
-      <label>Server URL</label>
-      <input id="serverUrlInput" type="text" />
-      <label>API token</label>
-      <input id="apiTokenInput" type="password" />
-      <div id="settingsTest" class="result hidden"></div>
-      <div class="modal-actions">
-        <button id="settingsTestBtn" class="btn-ghost">टेस्ट</button>
-        <button id="settingsDiagnoseBtn" class="btn-ghost">जाँच</button>
-        <button id="settingsSaveBtn" class="btn-primary">सेव</button>
+      <label>थीम / Theme</label>
+      <div class="chips" id="themeChips" style="margin:0 18px 4px">
+        <button class="chip" data-theme="bazaar">🎪 बाज़ार</button>
+        <button class="chip" data-theme="midnight">🌙 Midnight</button>
+        <button class="chip" data-theme="munim">📒 मुनीम</button>
       </div>
-      <p class="muted small">डिफ़ॉल्ट सेट हैं — आमतौर पर बदलने की ज़रूरत नहीं।</p>
+      <p class="muted small" style="margin:10px 18px 0">थीम बदलते ही होम + रिपोर्ट सब बदल जाएगा।</p>
     </div>
   </div>
 

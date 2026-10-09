@@ -10,9 +10,12 @@
 // Risky single words (do/dena/dya/din/kodi/tharu...) are only trusted inside
 // multi-word phrases, never standalone, to avoid false positives on chat.
 
-const UNITS = 'kg|kgs|kilogram|kilograms|kilo|kilos|keji|gram|grams|graam|gms|gm|g|dozen|darjan|pcs|pieces|piece|pees|pis|nag|ml|millilitre|millilitres|milliliter|milliliters|litre|litres|liter|liters|l|ser|seer|sher|pav|paav|poa|tola|thola|tol|ratti|chatak|chhatank|masha|vori|ennam|ennikkai|mukka|item|ta';
+const UNITS = 'kg|kgs|kilogram|kilograms|kilo|kilos|keji|gram|grams|graam|gms|gm|g|dozen|darjan|pcs|pieces|piece|pees|pis|pc|nag|ml|millilitre|millilitres|milliliter|milliliters|litre|litres|liter|liters|l|ser|seer|sher|pav|paav|poa|tola|thola|tol|ratti|chatak|chhatank|masha|vori|ennam|ennikkai|mukka|item|ta';
 
 const QUANTITY_RE = new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${UNITS})\\b`, 'i');
+// Bare number with no unit ("10 laddu chahiye") - only a quantity when an
+// order-intent word is present; price/profit/total numbers never qualify.
+const BARE_NUMBER_RE = /\b\d+(?:\.\d+)?\b/g;
 const UNIT_NOT_AFTER = new RegExp(`(?!\\s*(?:${UNITS})\\b)`, 'i');
 const COST_RE = /(?:total\s*)?(?:cost|cp|base\s*price|buying\s*price|price)\s*(?:of\s*[a-z ]+)?\s*(?:[=:]|is|are)?\s*(?:rs\.?|rupees|inr|\u20B9)?\s*(\d+(?:\.\d+)?)/i;
 const SOLD_FOR_RE = new RegExp(
@@ -135,7 +138,7 @@ const UNIT_NORMALIZE = {
   kg: 'kg', kgs: 'kg', kilogram: 'kg', kilograms: 'kg', kilo: 'kg', kilos: 'kg', keji: 'kg',
   gram: 'g', grams: 'g', graam: 'g', gms: 'g', gm: 'g', g: 'g',
   dozen: 'dozen', darjan: 'dozen',
-  pcs: 'pcs', pieces: 'pcs', piece: 'pcs', pees: 'pcs', pis: 'pcs', nag: 'pcs',
+  pcs: 'pcs', pieces: 'pcs', piece: 'pcs', pees: 'pcs', pis: 'pcs', pc: 'pcs', nag: 'pcs',
   ennam: 'pcs', ennikkai: 'pcs', mukka: 'pcs', item: 'pcs', ta: 'pcs',
   litre: 'l', litres: 'l', liter: 'l', liters: 'l', l: 'l',
   ml: 'ml', millilitre: 'ml', millilitres: 'ml', milliliter: 'ml', milliliters: 'ml',
@@ -143,7 +146,7 @@ const UNIT_NORMALIZE = {
   tola: 'g', thola: 'g', tol: 'g', ratti: 'g', chatak: 'g', chhatank: 'g', masha: 'g', vori: 'g',
 };
 
-const ITEM_TAIL_STOP = /\s+(?:mange|mangwaya|mangaye|chahiye|bhejo|bhejna|bhej|karo|krdo|please|ke\s+liye|pahije|pathva|banvun|kavali|beku|venam|venum|chahida|joie|kalisi|kaluhisi|anuppunga|pampandi|kudunga|tharu|pathan|din|dya|venam|bana do|bana dena|de do|de dena|bhej do|bhej dena|taiyar kar do|pack kar do|pathavun dya|banvun dya|pathiye din|baniye din|pack kore din|rekhe din|ready pannunga|pack pannunga|pampincheyandi|ivvandi|ready cheyandi|pack cheyandi|ready madi|pack madi|ittu kodi|madi kodi|ayachu tharu|ayach tharu|cheithu tharu|undakki tharu|pack cheythu|mokli do|mokli aapo|aapi do|banavi aapo|ready kari do|pack kari do|rakhi do|bhej deo|bana deo|de deo|tyaar kar deo|ready kar deo|pack kar deo|rakh deo|bhej dein|de dein|bana dein|tayyar kar dein|delivery kar do)\b.*$/i;
+const ITEM_TAIL_STOP = /\s+(?:mange|mangwaya|mangaye|chahiye|bhejo|bhejna|bhej|dena|dein|deo|karo|krdo|please|ke\s+liye|pahije|pathva|banvun|kavali|beku|venam|venum|chahida|joie|kalisi|kaluhisi|anuppunga|pampandi|kudunga|tharu|pathan|din|dya|venam|bana do|bana dena|de do|de dena|bhej do|bhej dena|taiyar kar do|pack kar do|pathavun dya|banvun dya|pathiye din|baniye din|pack kore din|rekhe din|ready pannunga|pack pannunga|pampincheyandi|ivvandi|ready cheyandi|pack cheyandi|ready madi|pack madi|ittu kodi|madi kodi|ayachu tharu|ayach tharu|cheithu tharu|undakki tharu|pack cheythu|mokli do|mokli aapo|aapi do|banavi aapo|ready kari do|pack kari do|rakhi do|bhej deo|bana deo|de deo|tyaar kar deo|ready kar deo|pack kar deo|rakh deo|bhej dein|de dein|bana dein|tayyar kar dein|delivery kar do)\b.*$/i;
 
 function toNum(v) {
   const n = parseFloat(v);
@@ -230,6 +233,29 @@ function matchQuantity(text) {
       match: fq,
     };
   }
+  // Bare number, no unit: "bhai 10 laddu chahiye". Numbers already claimed
+  // by a price/profit/total pattern ("cost 60", "total 230") never qualify.
+  const bare = matchBareNumber(text);
+  if (bare) return bare;
+  return null;
+}
+
+function matchBareNumber(text) {
+  const taken = [];
+  for (const re of [COST_RE, SOLD_FOR_RE, PROFIT_PCT_RE, PROFIT_PCT_WORD_RE, PROFIT_AMT_RE, TOTAL_RE]) {
+    const m = text.match(re);
+    if (m && m.index != null && m[1] != null) {
+      const at = m[0].indexOf(String(m[1]));
+      if (at >= 0) taken.push([m.index + at, m.index + at + String(m[1]).length]);
+    }
+  }
+  BARE_NUMBER_RE.lastIndex = 0;
+  let m;
+  while ((m = BARE_NUMBER_RE.exec(text))) {
+    const s = m.index, e = s + m[0].length;
+    if (taken.some(([a, b]) => s < b && e > a)) continue;
+    return { quantity: toNum(m[0]), unit: null, match: m, bare: true };
+  }
   return null;
 }
 
@@ -239,15 +265,22 @@ function matchQuantity(text) {
  */
 function parseOrder(text) {
   if (!text) return null;
-  const hasIntent = ROMAN_INTENT_RE.test(text) || NATIVE_INTENT_RE.test(text);
-  if (!hasIntent) return null;
-
   const customer = extractCustomer(text);
 
   const qty = matchQuantity(text);
   const quantity = qty ? qty.quantity : null;
   const unit = qty ? qty.unit : null;
   const item = extractItem(text, qty ? qty.match : null);
+
+  // A bare "500g sugar" (quantity + item, no intent word) is treated as an order
+  // too - this is a business inbox, not general chat. The old intent-only gate
+  // missed exactly the messages customers send, and only the server's AI path
+  // happened to rescue them.
+  const hasIntent = ROMAN_INTENT_RE.test(text) || NATIVE_INTENT_RE.test(text);
+  // A bare number ("10 laddu") counts only with an intent word ("chahiye") -
+  // without one it's too loose ("I have 10 laddu at home" is not an order).
+  const bareOrder = quantity != null && item != null && item.trim() !== '' && (!(qty && qty.bare) || hasIntent);
+  if (!hasIntent && !bareOrder) return null;
 
   let costPrice = null;
   let totalAmount = null;
