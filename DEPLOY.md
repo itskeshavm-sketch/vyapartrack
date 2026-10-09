@@ -30,7 +30,7 @@ git push -u origin main
    - **Start Command:** `npm start`
    - **Plan:** Free
 4. Scroll to **Environment Variables** and add:
-   - `POOLSIDE_API_KEY` = `sky_Enz4ISLy.cSr8KUk3ySWAFyf9OYROfBRbFuFPs1l5`
+   - `POOLSIDE_API_KEY` = `paste-your-key-here` (get one at inference.poolside.ai)
    - (others are pre-filled from `render.yaml`)
 5. Click **Create Web Service**. Wait ~3 min for the first build.
 
