@@ -7,7 +7,7 @@
         <package android:name="com.whatsapp.w4b" />
     </queries>
 
-    <!-- Needed for the Poolside AI parser to call its inference endpoint. -->
+    <!-- Needed for WhatsApp sharing and the optional hosted-server connection. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- On-phone WhatsApp engine: foreground service keeps whatsmeow alive. -->

@@ -97,7 +97,7 @@ function timeAgo(iso) {
 }
 
 function sourceLabel(s) {
-  return ({ whatsapp: 'WhatsApp', manual: 'Manual', ai: 'AI', regex: 'Parser', demo: 'Demo' })[s] || s || '';
+  return ({ whatsapp: 'WhatsApp', manual: 'Manual', parser: 'Parser', regex: 'Parser', demo: 'Demo' })[s] || s || '';
 }
 
 function renderOrders(orders) {
@@ -142,9 +142,7 @@ async function refreshStatus() {
       // Dashboard/demo mode: there is no WhatsApp process to pair with, so
       // don't show a scary red error or a setup form that cannot work.
       pill.className = 'status-pill demo';
-      $('botStatusText').textContent = st.aiConfigured
-        ? 'Dashboard mode · AI parser'
-        : 'Dashboard mode · offline parser';
+      $('botStatusText').textContent = 'Dashboard mode · offline parser';
       setup.classList.add('hidden');
     } else {
       pill.className = 'status-pill offline';
@@ -188,18 +186,9 @@ $('pairBtn').addEventListener('click', async () => {
   }
 });
 
-async function refreshAIStatus() {
-  try {
-    const st = await fetchJSON('/api/status');
-    const ai = $('aiStatus');
-    if (st.aiConfigured) {
-      ai.className = 'status-pill ai on';
-      ai.innerHTML = '<span class="dot"></span><span>AI parser on</span>';
-    } else {
-      ai.className = 'status-pill ai';
-      ai.innerHTML = '<span class="dot"></span><span>AI parser off (regex mode)</span>';
-    }
-  } catch { /* ignore */ }
+function refreshParserStatus() {
+  const pill = $('parserStatus');
+  if (pill) pill.className = 'status-pill parser on';
 }
 
 $('orderForm').addEventListener('submit', async (e) => {
@@ -257,6 +246,6 @@ $('ordersBody').addEventListener('click', async (e) => {
 refreshOrders().catch(() => {});
 refreshStats().catch(() => {});
 refreshStatus();
-refreshAIStatus();
+refreshParserStatus();
 setInterval(refreshStatus, 5000);
 setInterval(() => { refreshOrders().catch(() => {}); refreshStats().catch(() => {}); }, 10000);

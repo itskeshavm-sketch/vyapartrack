@@ -234,7 +234,7 @@ function renderOrders(orders) {
   }).join('');
 }
 function sourceLabel(s) {
-  return ({ whatsapp: '📱 WhatsApp', manual: '✍ खुद डाला', ai: '🤖 AI', regex: '🧮 parser', demo: '🎁 डेमो' })[s] || s || '—';
+  return ({ whatsapp: '📱 WhatsApp', manual: '✍ खुद डाला', parser: '🧮 parser', regex: '🧮 parser', demo: '🎁 डेमो' })[s] || s || '—';
 }
 function renderStats(orders) {
   let revenue = 0, cost = 0, profit = 0;
@@ -646,7 +646,7 @@ function closeSettings() { $('settingsModal').classList.add('hidden'); }
 $('settingsBtn').addEventListener('click', openSettings);
 $('settingsCloseBtn').addEventListener('click', closeSettings);
 
-// ============ Local regex parser (offline fallback) ============
+// ============ Local offline parser ============
 const UNITS = 'kg|kgs|kilogram|kilograms|kilo|kilos|keji|gram|grams|graam|gms|gm|g|dozen|darjan|pcs|pieces|piece|pees|pis|pc|nag|ml|millilitre|millilitres|milliliter|milliliters|litre|litres|liter|liters|l|ser|seer|sher|pav|paav|poa|tola|thola|tol|ratti|chatak|chhatank|masha|vori|ennam|ennikkai|mukka|item|ta';
 
 const QUANTITY_RE = new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${UNITS})\\b`, 'i');

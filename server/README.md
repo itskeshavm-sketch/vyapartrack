@@ -1,11 +1,11 @@
 # VyaparTrack server
 
-Node.js + zapo-js + optional Poolside AI backend for the Android app and hosted dashboard.
+Node.js + zapo-js + offline order parser backend for the Android app and hosted dashboard.
 
 ## What it does
 
 - Connects to WhatsApp via **zapo-js** (incoming message tracking, QR + pairing-code login)
-- Parses each message through **Poolside `laguna-xs-2.1`** when configured, with the shared offline parser as fallback
+- Parses each message with the shared **offline parser** in `../src/parser.js`
 - Records orders in `server/data/orders.json` and sends an auto-reply confirmation
 - Exposes a REST API (`/api/orders`, `/api/stats`, `/api/status`, `/api/pair`, `/api/catalog`, `/api/pending-pricing`) protected by an `X-API-Token` header
 - Serves `/api/health` without auth for uptime checks
@@ -52,8 +52,8 @@ All endpoints except `/api/health` require header `X-API-Token: <API_TOKEN>`.
 
 | Method | Path | Body | Returns |
 |---|---|---|---|
-| GET | `/api/health` | — | `{ ok, aiConfigured, aiModel, botStarted }` |
-| GET | `/api/status` | — | `{ connected, connecting, qrDataUrl, pairingCode, lastError, aiConfigured, aiModel }` |
+| GET | `/api/health` | — | `{ ok, parser, botStarted }` |
+| GET | `/api/status` | — | `{ connected, connecting, qrDataUrl, pairingCode, lastError, parser }` |
 | POST | `/api/pair` | `{ "phone": "9876543210" }` | `{ code, expiresIn }` |
 | GET | `/api/orders` | — | `[ {...order}, ... ]` |
 | POST | `/api/orders` | `{ "text": "..." }` | created order |

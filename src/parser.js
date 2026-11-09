@@ -291,8 +291,7 @@ function parseOrder(text) {
 
   // A bare "500g sugar" (quantity + item, no intent word) is treated as an order
   // too - this is a business inbox, not general chat. The old intent-only gate
-  // missed exactly the messages customers send, and only the server's AI path
-  // happened to rescue them.
+  // missed exactly the messages customers send.
   const hasIntent = ROMAN_INTENT_RE.test(text) || NATIVE_INTENT_RE.test(text);
   // A bare number ("10 laddu") counts only with an intent word ("chahiye") -
   // without one it's too loose ("I have 10 laddu at home" is not an order).

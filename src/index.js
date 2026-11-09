@@ -41,8 +41,7 @@ async function main() {
   await startServer(PORT, statusFn, pairFn);
 
   console.log(`\n  📊 Dashboard : http://localhost:${PORT}`);
-  console.log(`  🔗 Poolside  : ${process.env.POOLSIDE_API_KEY ? 'configured' : 'not configured (offline regex parser)'}`);
-  console.log(`  🤖 Model     : ${process.env.POOLSIDE_MODEL || 'poolside/laguna-xs-2.1'}`);
+  console.log(`  🧮 Parser    : offline (Hinglish + native scripts)`);
   console.log(`  💬 WhatsApp  : ${NO_BOT ? 'disabled (NO_BOT=true)' : bot ? 'starting…' : 'unavailable'}\n`);
 
   if (!bot) return;

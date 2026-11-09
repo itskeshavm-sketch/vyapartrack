@@ -83,16 +83,14 @@ public class LocalApi extends NanoHTTPD {
                     case "/api/health": {
                         JSONObject h = new JSONObject();
                         h.put("ok", true);
-                        h.put("aiConfigured", false);
-                        h.put("aiModel", "on-device regex");
+                        h.put("parser", "offline");
                         h.put("botStarted", true);
                         h.put("engine", "on-phone");
                         return json(200, h);
                     }
                     case "/api/status": {
                         JSONObject s = new JSONObject(EngineHandler.lastStatus);
-                        s.put("aiConfigured", false);
-                        s.put("aiModel", "on-device regex");
+                        s.put("parser", "offline");
                         if (pairingCode != null && System.currentTimeMillis() - pairingCodeAt < PAIRING_TTL_MS) {
                             s.put("pairingCode", pairingCode);
                             s.put("pairingExpiresAt", pairingCodeAt + PAIRING_TTL_MS);

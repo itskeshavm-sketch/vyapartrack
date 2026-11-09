@@ -35,7 +35,7 @@ npm install
 npm run start:demo
 ```
 
-Open **http://localhost:3000**. `start:demo` runs the dashboard only, disables WhatsApp, forces the offline parser, and seeds four sample orders on first run.
+Open **http://localhost:3000**. `start:demo` runs the dashboard only, disables WhatsApp, uses the offline parser, and seeds four sample orders on first run.
 
 To start fresh, delete `data/orders.json` and run `npm run start:demo` again.
 
@@ -59,8 +59,7 @@ The WhatsApp network connection itself requires outbound WebSocket access to `we
 
 ## How orders are read
 
-1. If `POOLSIDE_API_KEY` is set and `USE_AI_PARSER` is not `false`, the message is sent to **Poolside** (`poolside/laguna-xs-2.1`) for extraction.
-2. Otherwise, or if the API fails, the built-in offline regex parser handles it. The tool never stops tracking because an API is down.
+Every message is parsed by the **built-in offline parser** in `src/parser.js`. There is no AI service, no API key, and no network call — the same parser runs on the desktop, in the hosted server, and on the phone. It never stops tracking because an external service is down.
 
 The offline parser handles:
 
@@ -89,14 +88,10 @@ The offline parser handles:
 |---|---|---|
 | `PORT` | `3000` | Dashboard/API port |
 | `NO_BOT` | `false` | `true` = dashboard only, never connect to WhatsApp |
-| `USE_AI_PARSER` | `true` | `false` = always use the offline parser |
-| `POOLSIDE_API_KEY` | — | Optional; enables AI-first extraction |
-| `POOLSIDE_MODEL` | `poolside/laguna-xs-2.1` | Poolside model |
-| `POOLSIDE_BASE_URL` | `https://inference.poolside.ai/v1` | Override only if Poolside specifies another endpoint |
 | `AUTO_REPLY` | `true` | Send a short order confirmation to the customer |
 | `VYAPAR_DATA_DIR` | `./data` | Where orders/contacts are stored |
 
-The API key is read only from `.env`; it is never hardcoded or logged. Keep `.env` out of git.
+All order parsing is local and deterministic, so there are no AI keys or model settings to configure. Keep `.env` out of git.
 
 ## Tests
 
@@ -115,7 +110,7 @@ The smoke test never touches your real `data/orders.json`.
 
 | Method | Path | Body | Returns |
 |---|---|---|---|
-| GET | `/api/health` | — | `{ ok, aiConfigured, aiModel, bot }` |
+| GET | `/api/health` | — | `{ ok, parser, bot }` |
 | GET | `/api/status` | — | WhatsApp pairing/connection status |
 | POST | `/api/pair` | `{ "phone": "9876543210" }` | `{ code }` |
 | GET | `/api/orders` | — | all orders |
@@ -162,9 +157,8 @@ src/
   index.js       desktop/host entry point (dashboard + optional bot)
   server.js      Express REST API + dashboard
   bot.js         zapo-js WhatsApp connection, pairing code/QR, message listener
-  extractor.js   AI-first, offline-parser fallback
+  extractor.js   thin wrapper around the offline parser
   parser.js      shared offline parser (Hinglish + native scripts)
-  poolside.js    optional Poolside client
   store.js       JSON persistence + stats
 public/          dashboard (HTML/CSS/JS)
 scripts/         demo launcher, parser tests, smoke test, seeders

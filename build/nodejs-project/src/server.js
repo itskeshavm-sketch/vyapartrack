@@ -6,7 +6,6 @@ require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const express = require('express');
 const store = require('./store');
 const { extract } = require('./extractor');
-const poolside = require('./poolside');
 
 function createApp(botStatusFn, pairFn) {
   const app = express();
@@ -17,8 +16,15 @@ function createApp(botStatusFn, pairFn) {
 
   app.get('/api/stats', (req, res) => res.json(store.getStats()));
 
+  app.get('/api/health', (req, res) =>
+    res.json({
+      ok: true,
+      parser: 'offline',
+      bot: botStatusFn ? botStatusFn() : null,
+    }));
+
   app.get('/api/status', (req, res) =>
-    res.json({ ...(botStatusFn ? botStatusFn() : {}), aiConfigured: poolside.isConfigured(), aiModel: poolside.MODEL }));
+    res.json({ ...(botStatusFn ? botStatusFn() : {}), parser: 'offline' }));
 
   app.post('/api/pair', async (req, res) => {
     if (!pairFn) return res.status(501).json({ error: 'WhatsApp bot is not running (NO_BOT mode)' });

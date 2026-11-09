@@ -78,8 +78,8 @@ body {
 .status-pill.offline .dot { background: var(--red); }
 .status-pill.demo { color: var(--gold); border-color: rgba(245, 182, 66, 0.35); }
 .status-pill.demo .dot { background: var(--gold); }
-.status-pill.ai.on { color: var(--violet); border-color: rgba(139, 124, 246, 0.4); }
-.status-pill.ai.on .dot { background: var(--violet); box-shadow: 0 0 10px var(--violet); }
+.status-pill.parser { color: var(--green); border-color: rgba(37, 211, 102, 0.4); }
+.status-pill.parser .dot { background: var(--green); }
 
 @keyframes pulse { 50% { opacity: 0.5; } }
 

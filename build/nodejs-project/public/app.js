@@ -10,12 +10,80 @@ async function fetchJSON(url, opts) {
 }
 
 async function refreshStats() {
-  const s = await fetchJSON('/api/stats');
+  const [s, orders] = await Promise.all([
+    fetchJSON('/api/stats'),
+    fetchJSON('/api/orders').catch(() => []),
+  ]);
+  // Split totals by source so demo/fake money doesn't blend in with real.
+  let fake = 0;
+  let realRev = 0, realCost = 0, realProfit = 0;
+  let fakeRev = 0, fakeCost = 0, fakeProfit = 0;
+  for (const o of orders) {
+    const isFake = o.source === 'demo';
+    if (isFake) {
+      fake++;
+      if (o.totalAmount != null) fakeRev += o.totalAmount;
+      if (o.costPrice != null) fakeCost += o.costPrice;
+      if (o.profitAmount != null) fakeProfit += o.profitAmount;
+    } else {
+      if (o.totalAmount != null) realRev += o.totalAmount;
+      if (o.costPrice != null) realCost += o.costPrice;
+      if (o.profitAmount != null) realProfit += o.profitAmount;
+    }
+  }
   $('statOrders').textContent = fmt.format(s.totalOrders);
+  // Show a DEMO badge on the Total Orders card so sample data can't be
+  // mistaken for real revenue at a glance.
+  const card = $('statOrders').closest('.stat-card');
+  let badge = $('statOrdersFake');
+  if (fake > 0) {
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.id = 'statOrdersFake';
+      badge.className = 'stat-fake-badge';
+      $('statOrders').insertAdjacentElement('afterend', badge);
+    }
+    badge.textContent = `${fake} DEMO`;
+    badge.title = `${fake} of ${s.totalOrders} orders are demo-seeded and not real revenue`;
+    card.classList.add('has-fake');
+  } else if (badge) {
+    badge.remove();
+    card.classList.remove('has-fake');
+  }
+  const ordersSub = card.querySelector('.stat-sub');
+  if (ordersSub) {
+    ordersSub.textContent = s.totalOrders > 0 && fake === s.totalOrders
+      ? 'demo sample data'
+      : 'tracked automatically';
+  }
   $('statRevenue').textContent = money(s.revenue);
   $('statProfit').textContent = money(s.profit);
   $('statCost').textContent = money(s.cost);
   $('statMargin').textContent = `${s.avgMarginPct}% avg margin`;
+
+  // Per-card "fake vs real" breakdown on the three money cards.
+  setFakeBreakdown('statRevenue', fakeRev, realRev);
+  setFakeBreakdown('statProfit', fakeProfit, realProfit);
+  setFakeBreakdown('statCost', fakeCost, realCost);
+}
+
+/** Append a small "(₹X fake · real ₹Y)" line under a money stat card. */
+function setFakeBreakdown(valueId, fakeAmt, realAmt) {
+  const card = $(valueId).closest('.stat-card');
+  if (!card) return;
+  let line = card.querySelector('.stat-fake-line');
+  if (fakeAmt > 0) {
+    if (!line) {
+      line = document.createElement('div');
+      line.className = 'stat-fake-line';
+      card.appendChild(line);
+    }
+    line.innerHTML = `<span class="fake-amt">${money(fakeAmt)} demo</span> · real <span class="real-amt">${money(realAmt)}</span>`;
+    card.classList.add('has-fake');
+  } else if (line) {
+    line.remove();
+    card.classList.remove('has-fake');
+  }
 }
 
 function timeAgo(iso) {
@@ -28,6 +96,10 @@ function timeAgo(iso) {
   return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 }
 
+function sourceLabel(s) {
+  return ({ whatsapp: 'WhatsApp', manual: 'Manual', parser: 'Parser', regex: 'Parser', demo: 'Demo' })[s] || s || '';
+}
+
 function renderOrders(orders) {
   const body = $('ordersBody');
   if (!orders.length) {
@@ -36,7 +108,7 @@ function renderOrders(orders) {
   }
   body.innerHTML = orders.map((o) => `
     <tr>
-      <td class="cust">${escapeHtml(o.customer)}</td>
+      <td class="cust">${escapeHtml(o.customer)}${o.source ? ` <span class="source-tag source-${o.source}" title="${escapeHtml(o.source)} order">${sourceLabel(o.source)}</span>` : ''}</td>
       <td><span class="item-tag">${escapeHtml(o.item)}</span></td>
       <td class="qty">${o.quantity != null ? fmt.format(o.quantity) + (o.unit ? ' ' + o.unit : '') : '—'}</td>
       <td class="money">${money(o.costPrice)}</td>
@@ -65,6 +137,12 @@ async function refreshStatus() {
     if (st.connected) {
       pill.className = 'status-pill online';
       $('botStatusText').textContent = 'WhatsApp connected';
+      setup.classList.add('hidden');
+    } else if (st.botEnabled === false) {
+      // Dashboard/demo mode: there is no WhatsApp process to pair with, so
+      // don't show a scary red error or a setup form that cannot work.
+      pill.className = 'status-pill demo';
+      $('botStatusText').textContent = 'Dashboard mode · offline parser';
       setup.classList.add('hidden');
     } else {
       pill.className = 'status-pill offline';
@@ -108,18 +186,9 @@ $('pairBtn').addEventListener('click', async () => {
   }
 });
 
-async function refreshAIStatus() {
-  try {
-    const st = await fetchJSON('/api/status');
-    const ai = $('aiStatus');
-    if (st.aiConfigured) {
-      ai.className = 'status-pill ai on';
-      ai.innerHTML = '<span class="dot"></span><span>AI parser on</span>';
-    } else {
-      ai.className = 'status-pill ai';
-      ai.innerHTML = '<span class="dot"></span><span>AI parser off (regex mode)</span>';
-    }
-  } catch { /* ignore */ }
+function refreshParserStatus() {
+  const pill = $('parserStatus');
+  if (pill) pill.className = 'status-pill parser on';
 }
 
 $('orderForm').addEventListener('submit', async (e) => {
@@ -158,6 +227,13 @@ $('demoBtn').addEventListener('click', async () => {
   await Promise.all([refreshOrders(), refreshStats()]);
 });
 
+document.querySelectorAll('.sample-chip').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    $('orderText').value = btn.dataset.text;
+    $('orderForm').requestSubmit();
+  });
+});
+
 $('refreshBtn').addEventListener('click', () => Promise.all([refreshOrders(), refreshStats(), refreshStatus()]));
 
 $('ordersBody').addEventListener('click', async (e) => {
@@ -170,6 +246,6 @@ $('ordersBody').addEventListener('click', async (e) => {
 refreshOrders().catch(() => {});
 refreshStats().catch(() => {});
 refreshStatus();
-refreshAIStatus();
+refreshParserStatus();
 setInterval(refreshStatus, 5000);
 setInterval(() => { refreshOrders().catch(() => {}); refreshStats().catch(() => {}); }, 10000);

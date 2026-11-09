@@ -8,7 +8,6 @@ const os = require('os');
 
 const TMP_DIR = path.join(os.tmpdir(), `vyapartrack-smoke-${process.pid}-${Date.now()}`);
 process.env.VYAPAR_DATA_DIR = TMP_DIR;
-process.env.USE_AI_PARSER = 'false';
 process.env.NO_BOT = 'true';
 
 const { createApp } = require('../src/server');
@@ -26,7 +25,7 @@ async function main() {
   // start clean
   try { fs.rmSync(ORDERS_FILE); } catch {}
 
-  const app = createApp(() => ({ connected: false, aiConfigured: false }));
+  const app = createApp(() => ({ connected: false }));
   const server = app.listen(0, '127.0.0.1');
   await new Promise((r) => server.on('listening', r));
   const base = `http://127.0.0.1:${server.address().port}`;
@@ -81,7 +80,7 @@ async function main() {
 
   console.log('[9] GET /api/status');
   r = await j('/api/status');
-  assert(r.status === 200 && 'aiConfigured' in r.body, 'status includes aiConfigured', r.body);
+  assert(r.status === 200 && r.body.parser === 'offline', 'status reports offline parser', r.body);
 
   server.closeAllConnections?.();
   server.close();

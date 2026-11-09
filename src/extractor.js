@@ -1,22 +1,11 @@
-// Order extraction orchestrator: Poolside AI first (when configured),
-// built-in regex parser as fallback. Validates and fills gaps either way.
+// Order extraction: the built-in offline parser is the only parser.
+// It handles Hinglish, English, spoken fractions, and native scripts with
+// no network calls, API keys, or external services.
 
-const { extractOrder, isConfigured } = require('./poolside');
 const { parseOrder } = require('./parser');
 
 async function extract(messageText) {
-  let order = null;
-
-  if (process.env.USE_AI_PARSER !== 'false' && isConfigured()) {
-    order = await extractOrder(messageText);
-    if (order) {
-      // Sanity check: an AI result needs a cost, a total, or a quantity
-      if (order.costPrice == null && order.totalAmount == null && order.quantity == null) order = null;
-    }
-  }
-
-  if (!order) order = parseOrder(messageText);
-  return order;
+  return parseOrder(messageText);
 }
 
 module.exports = { extract };

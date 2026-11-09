@@ -1,6 +1,6 @@
 # Deploy VyaparTrack to Render (5 minutes)
 
-The hosted server handles WhatsApp and optional Poolside AI for the Android app. Render's free tier is enough for a demo.
+The hosted server handles WhatsApp and order parsing for the Android app. Render's free tier is enough for a demo.
 
 ## 1. Push the repo to GitHub
 
@@ -29,7 +29,6 @@ git push -u origin main
    - **Health Check Path:** `/api/health`
    - **Plan:** Free
 4. Add environment variables:
-   - `POOLSIDE_API_KEY` — optional; only needed for AI-first parsing
    - `API_TOKEN` — Render generates one automatically from `render.yaml`; or paste a strong random string
    - `AUTO_REPLY` — `true` (default)
 5. Click **Create Web Service** and wait for the first build.
@@ -87,6 +86,6 @@ Every incoming order message is parsed and appears in the dashboard within a few
 ## Troubleshooting
 
 - **Dashboard loads but no bot:** check `NO_BOT` is not `true`; check the Render logs for WhatsApp WebSocket errors. Some networks block `wss://web.whatsapp.com`.
-- **AI not used:** set `POOLSIDE_API_KEY`; check `/api/health` returns `aiConfigured: true`. Without a key the offline parser still works.
+- **Parser issues:** the offline parser lives in `src/parser.js`; `/api/health` returns `parser: "offline"`. No API key or network access is involved.
 - **No orders after restart:** confirm the Render disk is mounted at `/opt/render/project/src/server/data`, matching `VYAPAR_DATA_DIR`/the default `server/data`.
 - **401 from the API:** send `X-API-Token` with the token printed in the logs.

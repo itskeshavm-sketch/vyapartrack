@@ -1,4 +1,4 @@
-﻿// VyaparTrack server: WhatsApp (zapo-js) + Poolside AI parsing + REST API for the Android client.
+﻿// VyaparTrack server: WhatsApp (zapo-js) + offline order parser + REST API for the Android client.
 // Deploy to Render/Railway/Fly.io free tier. See README.md.
 
 const fs = require('fs');
@@ -20,9 +20,6 @@ const PORT = parseInt(process.env.PORT || '3000', 10);
 const DATA_DIR = process.env.VYAPAR_DATA_DIR || path.join(__dirname, 'data');
 const AUTH_DIR = process.env.VYAPAR_AUTH_DIR || path.join(__dirname, 'auth');
 const STORE_PATH = process.env.VYAPAR_AUTH_DB || path.join(AUTH_DIR, 'zapo.db');
-const POOLSIDE_API_KEY = process.env.POOLSIDE_API_KEY || '';
-const POOLSIDE_MODEL = process.env.POOLSIDE_MODEL || 'poolside/laguna-xs-2.1';
-const POOLSIDE_BASE_URL = process.env.POOLSIDE_BASE_URL || 'https://inference.poolside.ai/v1';
 const API_TOKEN = process.env.API_TOKEN || crypto.randomBytes(24).toString('hex');
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -288,76 +285,13 @@ function pricingQuestionText(p) {
   );
 }
 
-// ============ Poolside AI parser ============
-const SYSTEM_PROMPT = `You are an order-extraction engine for small Indian businesses.
-Extract a JSON object from the message with EXACTLY these fields:
-{"customer": string|null, "item": string|null, "quantity": number|null, "unit": "kg"|"g"|"ml"|"l"|"pcs"|"dozen"|null, "costPrice": number|null, "profitPercent": number|null, "profitAmount": number|null, "totalAmount": number|null}
-Rules:
-- costPrice = what the shopkeeper paid (cost / CP / base price).
-- A message can be a valid order with only customer/item/quantity (price discussed later) - extract what is present, leave the rest null.
-- If profit is given as a percent of cost, compute profitAmount = costPrice * pct / 100.
-- If profit is given as an amount, compute profitPercent = profitAmount / costPrice * 100 (round to 2 decimals).
-- totalAmount = costPrice + profitAmount when not stated.
-- Amounts are INR numbers only, no symbols.
-- Reply with ONLY the JSON object, no markdown, no explanation.`;
-
-async function parseWithAI(text) {
-  if (!POOLSIDE_API_KEY) return null;
-  try {
-    const res = await fetch(`${POOLSIDE_BASE_URL}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${POOLSIDE_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: POOLSIDE_MODEL,
-        temperature: 0,
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: text },
-        ],
-      }),
-    });
-    if (!res.ok) {
-      console.error('[poolside]', res.status, await res.text());
-      return null;
-    }
-    const data = await res.json();
-    const content = data.choices?.[0]?.message?.content;
-    if (!content) return null;
-    const jsonText = content.replace(/```json|```/g, '').trim();
-    const parsed = JSON.parse(jsonText);
-    const num = (v) => (Number.isFinite(parseFloat(v)) ? parseFloat(v) : null);
-    return {
-      customer: parsed.customer || null,
-      item: parsed.item || null,
-      quantity: num(parsed.quantity),
-      unit: parsed.unit || null,
-      costPrice: num(parsed.costPrice),
-      profitPercent: num(parsed.profitPercent),
-      profitAmount: num(parsed.profitAmount),
-      totalAmount: num(parsed.totalAmount),
-      source: 'ai',
-      raw: text,
-    };
-  } catch (err) {
-    console.error('[poolside] failed:', err.message);
-    return null;
-  }
-}
-
-// ============ Regex parser (offline fallback) ============
+// ============ Offline parser ============
 // Shared with the desktop engine (src/parser.js) so native-script handling
 // (Devanagari, Bengali, Tamil, Telugu, Kannada, Malayalam, Gujarati, Gurmukhi,
 // Urdu) stays in one place and both entry points behave identically.
 const { parseOrder: parseWithRegex } = require('../src/parser');
 
 async function parseOrder(text) {
-  if (POOLSIDE_API_KEY) {
-    const ai = await parseWithAI(text);
-    if (ai && (ai.costPrice != null || ai.totalAmount != null || ai.quantity != null)) return ai;
-  }
   return parseWithRegex(text);
 }
 
@@ -731,9 +665,9 @@ function auth(req, res, next) {
   next();
 }
 
-app.get('/api/health', (req, res) => res.json({ ok: true, aiConfigured: Boolean(POOLSIDE_API_KEY), aiModel: POOLSIDE_MODEL, botStarted: Boolean(client) }));
+app.get('/api/health', (req, res) => res.json({ ok: true, parser: 'offline', botStarted: Boolean(client) }));
 app.get('/api/status', auth, (req, res) =>
-  res.json({ ...botStatus, aiConfigured: Boolean(POOLSIDE_API_KEY), aiModel: POOLSIDE_MODEL })
+  res.json({ ...botStatus, parser: 'offline' })
 );
 app.post('/api/pair', auth, async (req, res) => {
   try {
