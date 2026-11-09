@@ -17,10 +17,12 @@ Mayank · 500 g Ladoo · Cost ₹200 · Profit ₹30 (15%) · Total ₹230
 1. **[Download the APK](https://github.com/itskeshavm-sketch/vyapartrack/raw/main/VyaparTrack-v2.3-onetap-debug.apk)** — `VyaparTrack-v2.3-onetap-debug.apk`
 2. Open the downloaded file on your Android phone.
 3. Allow **"Install unknown apps"** if Android asks, then tap **Install**.
-4. Open **VyaparTrack**. Tap **Load demo data** to see the dashboard populated instantly.
-5. To track live orders, open **Settings → Pairing code**, enter the shop's WhatsApp number, and link the device in WhatsApp. Or skip WhatsApp and paste an order into **Add / Test order**.
+4. Open **VyaparTrack**. If the server dialog appears, tap **Close** — the app runs fully offline.
+5. Tap **Load demo data** to see the dashboard populated instantly.
 
-The dashboard, parser, and order storage run **on the phone**, so the demo works offline and business data never leaves the device.
+The dashboard, parser, and order storage run **on the phone**, so the demo works offline and business data never leaves the device. Type or paste an order into **Add / Test order**, then tap the share icon to send a confirmation to WhatsApp.
+
+To auto-track incoming WhatsApp messages, connect the app to the hosted server: deploy it with `DEPLOY.md`, then paste the server URL and API token into **Settings**. Live WhatsApp tracking is a server feature; the offline APK handles manual orders, pricing, profit, and sharing by itself.
 
 > **Demo tip:** load the sample orders before judging. They carry a **DEMO** badge so sample revenue is never confused with real business.
 
@@ -135,9 +137,11 @@ The server prints its API token on first boot; protected endpoints use the `X-AP
 
 ## Build the Android app yourself
 
-The repo includes a prebuilt debug APK, **`VyaparTrack-v2.3-onetap-debug.apk`**, plus the current Android source/assets (engine v2.7) under `android/`.
+The prebuilt **`VyaparTrack-v2.3-onetap-debug.apk`** is the offline WebView client: local parser, demo data, profit dashboard, and WhatsApp sharing. It does not auto-read incoming WhatsApp messages without the hosted server.
 
-- The app embeds the on-phone Node engine and serves the dashboard in a WebView at `http://127.0.0.1:3000`, so it works offline and data stays on the device.
+The newer `android/` source (engine v2.7) contains the on-phone engine work:
+
+- It embeds the on-phone Node engine and serves the dashboard in a WebView at `http://127.0.0.1:3000`, so it can work offline and keep data on the device.
 - Orders and WhatsApp session data live in app-private storage.
 - Login uses the pairing-code flow because a phone cannot scan its own QR.
 
