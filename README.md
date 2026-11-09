@@ -28,11 +28,10 @@ To auto-track incoming WhatsApp messages, connect the app to the hosted server: 
 
 ## 💻 Run on desktop (optional, for development)
 
-Requires **Node.js 22 or newer**.
+Requires **Node.js 22 or newer**. Paste this **one line** into PowerShell or CMD from the repo folder — it installs dependencies and starts the local dashboard + API server:
 
-```bash
-npm install
-npm run start:demo
+```cmd
+cmd /c "npm install && npm run start:demo"
 ```
 
 Open **http://localhost:3000**. `start:demo` runs the dashboard only, disables WhatsApp, uses the offline parser, and seeds four sample orders on first run.
