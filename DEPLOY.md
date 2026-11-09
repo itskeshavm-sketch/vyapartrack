@@ -1,10 +1,8 @@
-# Deploy VyaparTrack server to Render (5 minutes)
+# Deploy VyaparTrack to Render (5 minutes)
 
-The Android app needs a small server to handle WhatsApp + Poolside AI. Render's free tier is enough.
+The hosted server handles WhatsApp and optional Poolside AI for the Android app. Render's free tier is enough for a demo.
 
 ## 1. Push the repo to GitHub
-
-You need a GitHub account. From a terminal in the project root:
 
 ```bash
 git init
@@ -12,7 +10,7 @@ git add .
 git commit -m "VyaparTrack"
 ```
 
-Then create an empty repo on github.com (e.g., `vyapartrack`) and:
+Create an empty repo on github.com, then:
 
 ```bash
 git remote add origin https://github.com/YOUR_USERNAME/vyapartrack.git
@@ -22,59 +20,73 @@ git push -u origin main
 
 ## 2. Create the Render service
 
-1. Go to **https://render.com** → sign up with GitHub.
-2. Click **New +** → **Web Service** → select your `vyapartrack` repo.
-3. Render auto-detects `render.yaml` at the repo root and pre-fills the config. Confirm:
-   - **Root Directory:** `server`
-   - **Build Command:** `npm install`
-   - **Start Command:** `npm start`
+1. Go to **https://render.com** and sign up with GitHub.
+2. Click **New + → Web Service** and select your `vyapartrack` repo.
+3. Render detects `render.yaml` and pre-fills the configuration. Confirm:
+   - **Root Directory:** repository root (leave blank / `.`)
+   - **Build Command:** `npm install --no-audit --no-fund`
+   - **Start Command:** `node server/server.js`
+   - **Health Check Path:** `/api/health`
    - **Plan:** Free
-4. Scroll to **Environment Variables** and add:
-   - `POOLSIDE_API_KEY` = `paste-your-key-here` (get one at inference.poolside.ai)
-   - (others are pre-filled from `render.yaml`)
-5. Click **Create Web Service**. Wait ~3 min for the first build.
+4. Add environment variables:
+   - `POOLSIDE_API_KEY` — optional; only needed for AI-first parsing
+   - `API_TOKEN` — Render generates one automatically from `render.yaml`; or paste a strong random string
+   - `AUTO_REPLY` — `true` (default)
+5. Click **Create Web Service** and wait for the first build.
+
+> Use the repo root, not `server/` alone: `server/server.js` imports the shared parser from `src/parser.js`.
 
 ## 3. Grab the API token and URL
 
-When the deploy finishes, the **Logs** tab shows a line like:
+When the deploy finishes, open the **Logs** tab and find:
 
 ```
 API token (save it!): a1b2c3d4e5f6...
 ```
 
-Copy that token. Your server URL is shown at the top: `https://vyapartrack-xxxx.onrender.com`.
+Copy the token. The service URL is shown at the top, e.g. `https://vyapartrack-xxxx.onrender.com`.
 
-## 4. Bake the values into the APK (so users don't see Settings)
+## 4. Bake the values into the APK (optional)
 
-Edit `android/app/src/main/assets/dashboard/app.js` and set:
+To avoid showing Settings to demo users, edit `android/app/src/main/assets/dashboard/app.js`:
 
 ```js
 const DEFAULT_SERVER_URL = 'https://vyapartrack-xxxx.onrender.com';
 const DEFAULT_API_TOKEN = 'a1b2c3d4e5f6...';
 ```
 
-Then build the APK (in the project root):
+Then rebuild from the repo root:
 
 ```bash
+node scripts/pack-node.js
 cd android
 gradle :app:assembleDebug
 ```
 
-APK lands at `android/app/build/outputs/apk\debug/app-debug.apk`. Copy it to the phone and install.
+APK output: `android/app/build/outputs/apk/debug/app-debug.apk`. Copy it to the phone and install. You need JDK 17+, `ANDROID_HOME`, and the NDK configured in `android/app/build.gradle`.
 
-## 5. Keep the server awake (free tier sleeps after15 min idle)
+> The currently committed APK (`VyaparTrack-v2.3-onetap-debug.apk`) is an older debug build. Rebuild to pick up the current parser and dashboard.
 
-Free Render services sleep after 15 min of no traffic. WhatsApp needs the server awake to receive messages. Two options:
+## 5. Keep the free server awake
 
-- **Free cron ping:** Use a free service like [cron-job.org](https://cron-job.org) to hit `https://vyapartrack-xxxx.onrender.com/api/health` every 10 min. The server wakes in ~30s on first request.
-- **Paid Render plan ($7/mo):** the service never sleeps. Worth it if you use WhatsApp actively.
+Render free services sleep after 15 minutes without traffic. WhatsApp needs the server awake to receive messages.
 
-## 6. First-time WhatsApp login from the app
+- Use a free cron service such as [cron-job.org](https://cron-job.org) to request `https://vyapartrack-xxxx.onrender.com/api/health` every 10 minutes. The first request wakes the service in about 30 seconds.
+- Or use a paid Render instance for always-on service.
 
-Open the app on your phone → tap ⚙ **Settings** (or first-launch prompt) → **Test connection** → should say `✅ Connected — WhatsApp: waiting · AI: on`.
+## 6. First-time WhatsApp login
 
-Then tap the **Pairing code** button in the dashboard, enter your WhatsApp number → an 8-character code appears.
+Open the app → **Settings** → **Test connection**. You should see `ok: true`.
 
-On your phone's WhatsApp: **Settings → Linked Devices → Link a Device → "Link with phone number instead"** → type the code. Done.
+Tap **Pairing code**, enter the WhatsApp number, and an 8-character code appears.
 
-Every incoming order message gets parsed by Poolside and appears in the dashboard within a few seconds.
+On the phone: **WhatsApp → Settings → Linked Devices → Link a Device → "Link with phone number instead"** → type the code. Done.
+
+Every incoming order message is parsed and appears in the dashboard within a few seconds.
+
+## Troubleshooting
+
+- **Dashboard loads but no bot:** check `NO_BOT` is not `true`; check the Render logs for WhatsApp WebSocket errors. Some networks block `wss://web.whatsapp.com`.
+- **AI not used:** set `POOLSIDE_API_KEY`; check `/api/health` returns `aiConfigured: true`. Without a key the offline parser still works.
+- **No orders after restart:** confirm the Render disk is mounted at `/opt/render/project/src/server/data`, matching `VYAPAR_DATA_DIR`/the default `server/data`.
+- **401 from the API:** send `X-API-Token` with the token printed in the logs.

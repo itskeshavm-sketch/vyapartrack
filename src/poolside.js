@@ -4,7 +4,7 @@
 
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
-const BASE_URL = process.env.POOLSIDE_BASE_URL || 'https://api.poolside.ai/v1';
+const BASE_URL = process.env.POOLSIDE_BASE_URL || 'https://inference.poolside.ai/v1';
 const MODEL = process.env.POOLSIDE_MODEL || 'poolside/laguna-xs-2.1';
 
 const SYSTEM_PROMPT = `You are an order-extraction engine for small Indian businesses.

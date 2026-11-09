@@ -32,7 +32,7 @@ async function refreshStats() {
     }
   }
   $('statOrders').textContent = fmt.format(s.totalOrders);
-  // Show a FAKE badge on the Total Orders card so demo-seeded data can't be
+  // Show a DEMO badge on the Total Orders card so sample data can't be
   // mistaken for real revenue at a glance.
   const card = $('statOrders').closest('.stat-card');
   let badge = $('statOrdersFake');
@@ -43,12 +43,18 @@ async function refreshStats() {
       badge.className = 'stat-fake-badge';
       $('statOrders').insertAdjacentElement('afterend', badge);
     }
-    badge.textContent = `${fake} FAKE`;
+    badge.textContent = `${fake} DEMO`;
     badge.title = `${fake} of ${s.totalOrders} orders are demo-seeded and not real revenue`;
     card.classList.add('has-fake');
   } else if (badge) {
     badge.remove();
     card.classList.remove('has-fake');
+  }
+  const ordersSub = card.querySelector('.stat-sub');
+  if (ordersSub) {
+    ordersSub.textContent = s.totalOrders > 0 && fake === s.totalOrders
+      ? 'demo sample data'
+      : 'tracked automatically';
   }
   $('statRevenue').textContent = money(s.revenue);
   $('statProfit').textContent = money(s.profit);
@@ -72,7 +78,7 @@ function setFakeBreakdown(valueId, fakeAmt, realAmt) {
       line.className = 'stat-fake-line';
       card.appendChild(line);
     }
-    line.innerHTML = `<span class="fake-amt">${money(fakeAmt)} fake</span> · real <span class="real-amt">${money(realAmt)}</span>`;
+    line.innerHTML = `<span class="fake-amt">${money(fakeAmt)} demo</span> · real <span class="real-amt">${money(realAmt)}</span>`;
     card.classList.add('has-fake');
   } else if (line) {
     line.remove();
@@ -91,7 +97,7 @@ function timeAgo(iso) {
 }
 
 function sourceLabel(s) {
-  return ({ whatsapp: 'WhatsApp', manual: 'Manual', ai: 'AI', regex: 'Parser', demo: 'FAKE' })[s] || s || '';
+  return ({ whatsapp: 'WhatsApp', manual: 'Manual', ai: 'AI', regex: 'Parser', demo: 'Demo' })[s] || s || '';
 }
 
 function renderOrders(orders) {
@@ -131,6 +137,14 @@ async function refreshStatus() {
     if (st.connected) {
       pill.className = 'status-pill online';
       $('botStatusText').textContent = 'WhatsApp connected';
+      setup.classList.add('hidden');
+    } else if (st.botEnabled === false) {
+      // Dashboard/demo mode: there is no WhatsApp process to pair with, so
+      // don't show a scary red error or a setup form that cannot work.
+      pill.className = 'status-pill demo';
+      $('botStatusText').textContent = st.aiConfigured
+        ? 'Dashboard mode · AI parser'
+        : 'Dashboard mode · offline parser';
       setup.classList.add('hidden');
     } else {
       pill.className = 'status-pill offline';
@@ -222,6 +236,13 @@ $('orderForm').addEventListener('submit', async (e) => {
 $('demoBtn').addEventListener('click', async () => {
   await fetchJSON('/api/demo', { method: 'POST' });
   await Promise.all([refreshOrders(), refreshStats()]);
+});
+
+document.querySelectorAll('.sample-chip').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    $('orderText').value = btn.dataset.text;
+    $('orderForm').requestSubmit();
+  });
 });
 
 $('refreshBtn').addEventListener('click', () => Promise.all([refreshOrders(), refreshStats(), refreshStatus()]));

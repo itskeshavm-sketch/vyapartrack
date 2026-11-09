@@ -281,10 +281,10 @@ function pricingQuestionText(p) {
   const qty = p.unit ? `${p.examples[0] ? '' : ''}` : '';
   const itemLabel = p.unit ? `${p.item} (${p.unit})` : p.item;
   return (
-    `ðŸ›’ à¤¨à¤¯à¤¾ à¤†à¤‡à¤Ÿà¤® à¤®à¤¿à¤²à¤¾: *${itemLabel}*\n\n` +
-    `1ï¸âƒ£ à¤†à¤ª à¤‡à¤¸à¥‡ à¤•à¤¿à¤¤à¤¨à¥‡ à¤®à¥‡à¤‚ à¤¬à¥‡à¤šà¤¤à¥‡ à¤¹à¥ˆà¤‚? (â‚¹ à¤ªà¥à¤°à¤¤à¤¿ ${p.unit || 'à¤¯à¥‚à¤¨à¤¿à¤Ÿ'})\n` +
-    `2ï¸âƒ£ à¤‡à¤¸à¤®à¥‡à¤‚ à¤†à¤ªà¤•à¤¾ à¤–à¤°à¥à¤šà¤¾ à¤•à¤¿à¤¤à¤¨à¤¾ à¤¹à¥ˆ? (â‚¹ à¤ªà¥à¤°à¤¤à¤¿ ${p.unit || 'à¤¯à¥‚à¤¨à¤¿à¤Ÿ'})\n\n` +
-    `à¤à¤ª à¤®à¥‡à¤‚ à¤–à¥‹à¤²à¤•à¤° à¤­à¤°à¥‡à¤‚: Settings â†’ Pricing`
+    `🛒 नया आइटम मिला: *${itemLabel}*\n\n` +
+    `1️⃣ आप इसे कितने में बेचते हैं? (₹ प्रति ${p.unit || 'यूनिट'})\n` +
+    `2️⃣ इसमें आपका खर्चा कितना है? (₹ प्रति ${p.unit || 'यूनिट'})\n\n` +
+    `ऐप में खोलकर भरें: Settings → Pricing`
   );
 }
 
@@ -348,263 +348,10 @@ async function parseWithAI(text) {
 }
 
 // ============ Regex parser (offline fallback) ============
-const UNITS = 'kg|kgs|kilogram|kilograms|kilo|kilos|keji|gram|grams|graam|gms|gm|g|dozen|darjan|pcs|pieces|piece|pees|pis|pc|nag|ml|millilitre|millilitres|milliliter|milliliters|litre|litres|liter|liters|l|ser|seer|sher|pav|paav|poa|tola|thola|tol|ratti|chatak|chhatank|masha|vori|ennam|ennikkai|mukka|item|ta';
-
-const QUANTITY_RE = new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${UNITS})\\b`, 'i');
-// Bare number with no unit ("10 laddu chahiye") - only a quantity when an
-// order-intent word is present; price/profit/total numbers never qualify.
-const BARE_NUMBER_RE = /\b\d+(?:\.\d+)?\b/g;
-const UNIT_NOT_AFTER = new RegExp(`(?!\\s*(?:${UNITS})\\b)`, 'i');
-const COST_RE = /(?:total\s*)?(?:cost|cp|base\s*price|buying\s*price|price)\s*(?:of\s*[a-z ]+)?\s*(?:[=:]|is|are)?\s*(?:rs\.?|rupees|inr|\u20B9)?\s*(\d+(?:\.\d+)?)/i;
-const SOLD_FOR_RE = new RegExp(
-  `\\b(?:sold|sell|selling)\\b\\s*(?:it\\s*)?(?:at|for|in|to\\s+\\w+)?\\s*(?:rs\\.?|rupees|inr|\\u20B9)?\\s*(\\d+(?:\\.\\d+)?)\\b${UNIT_NOT_AFTER.source}`,
-  'i'
-);
-const PROFIT_PCT_RE = /\+?\s*(\d+(?:\.\d+)?)\s*%/;
-const PROFIT_PCT_WORD_RE = /(?:profit|margin)\s*(?:is|=|:|of|@)?\s*(\d+(?:\.\d+)?)\s*%/i;
-const PROFIT_AMT_RE = /(?:profit|margin)\s*(?:is|=|:|of)?\s*(?:rs\.?|rupees|inr|\u20B9)?\s*(\d+(?:\.\d+)?)\b(?!\s*%)/i;
-const TOTAL_RE = /total\s*(?:amount|price|sell(?:ing)?)?\s*(?:[=:]|is)?\s*(?:rs\.?|rupees|inr|\u20B9)?\s*(\d+(?:\.\d+)?)/i;
-
-// Fractional spoken quantities: "aadha kilo besan", "dedh kg doodh"...
-const FRACTION_QTY_RE = /\b(aadha|adha|ardha|half|dedh|dhai|sava|savva)\s*(kilo|kilos|kg|keji|gram|litre|liter)\b/i;
-const FRACTION_VALUES = { aadha: 0.5, adha: 0.5, ardha: 0.5, half: 0.5, dedh: 1.5, dhai: 1.5, sava: 1.25, savva: 1.25 };
-
-// Order intent, Roman script: safe single words + distinctive phrases.
-const ROMAN_INTENT_RE = new RegExp(
-  '\\b(?:order(?:ed|s)?|sold|sale|sell|bill|invoice|mangwaya|mange|mangaye|chahiye|bhejo|bhejna|bhej|kitna|kitne|mujhe|pahije|chai|kavali|beku|venam|venum|chahida|joie|kalisi|kaluhisi|anuppunga|pampandi)\\b' +
-  '|\\b(?:bana do|bana dena|de do|de dena|bhej do|bhej dena|taiyar kar do|tayar kar do|pack kar do|pack kar dena|ghar bhej|kitne ka|kitne mein|kitna lagega|rate kya|bhav batao|price batao|bhao kya|qeemat kya|total kitna|kiti padel|kiti hoil|kiti rupayala|bhav kay|rate sanga|kimmat sanga|total kiti|pathavun dya|banvun dya|tayar karun|pack karun|ghari pathva|koto porbe|koto hobe|dam koto|rate koto|total koto|koto taka|pathiye din|baniye din|toiri kore din|ready kore din|pack kore din|rekhe din|senju kudunga|ready pannunga|pack pannunga|veetukku anuppunga|evlo aagum|evlo varum|rate enna|price enna|vilai enna|total evlo|pampincheyandi|ivvandi|ichcheyandi|chesi ivvandi|tayaru cheyandi|ready cheyandi|pack cheyandi|entha avutundi|entha padutundi|rate entha|price entha|dhara entha|total entha|manege kalisi|tayarisi kodi|ittu kodi|madi kodi|ready madi|pack madi|eshtu agutte|eshtu barutte|bele eshtu|rate eshtu|price eshtu|total eshtu|ayachu tharu|ayach tharu|veettil ayakku|cheithu tharu|undakki tharu|ready aakki|pack cheythu|ethra aakum|ethra varum|vila ethra|rate ethra|price ethra|total ethra|ethra roopa|mokli do|mokli aapo|aapi do|aapi aapo|banavi aapo|taiyar kari aapo|ready kari do|pack kari do|rakhi do|ghare mokli|ketla thashe|ketlama malse|bhav ketlo|rate ketlo|ketlu padse|total ketlu|ketla rupiya|bhej deo|de deo|bana deo|tyaar kar deo|ready kar deo|pack kar deo|rakh deo|kinne da pavega|kinne nu milega|rate ki aa|bhav ki aa|price kinne di|kinne da aa|total kinna|kinne paise|bhej dein|de dein|bana dein|tayyar kar dein|kitne ka hoga|delivery kar do|delivery kore din|delivery pannunga|delivery cheyandi|delivery madi|delivery kari do)\\b' +
-  '|(?:can|may)\\s+i\\s+(?:get|have|order)|i\\s+(?:want|need)\\b',
-  'i'
-);
-
-// ---- Native-script support (u-flag, \p{L}/\p{M} lookarounds) ----
-const NATIVE_DIGITS = 'à¥¦à¥§à¥¨à¥©à¥ªà¥«à¥¬à¥­à¥®à¥¯à§¦à§§à§¨à§©à§ªà§«à§¬à§­à§®à§¯à¯¦à¯§à¯¨à¯©à¯ªà¯«à¯¬à¯­à¯®à¯¯à±¦à±§à±¨à±©à±ªà±«à±¬à±­à±®à±¯à³¦à³§à³¨à³©à³ªà³«à³¬à³­à³®à³¯àµ¦àµ§àµ¨àµ©àµªàµ«àµ¬àµ­àµ®àµ¯à©¦à©§à©¨à©©à©ªà©«à©¬à©­à©®à©¯Û°Û±Û²Û³Û´ÛµÛ¶Û·Û¸Û¹';
-const DIGIT_MAP = (() => {
-  const m = {};
-  for (let c = 0; c < NATIVE_DIGITS.length; c += 10) {
-    for (let i = 0; i < 10; i++) m[NATIVE_DIGITS[c + i]] = String(i);
-  }
-  return m;
-})();
-function normalizeDigits(s) { return String(s).replace(/./g, (ch) => DIGIT_MAP[ch] || ch); }
-
-const NATIVE_INTENT = [
-  'à¤šà¤¾à¤¹à¤¿à¤', 'à¤­à¥‡à¤œ à¤¦à¥‹', 'à¤­à¥‡à¤œ à¤¦à¥‡à¤¨à¤¾', 'à¤­à¥‡à¤œà¥‹', 'à¤¬à¤¨à¤¾ à¤¦à¥‹', 'à¤¬à¤¨à¤¾ à¤¦à¥‡à¤¨à¤¾', 'à¤¦à¥‡ à¤¦à¥‹', 'à¤¦à¥‡ à¤¦à¥‡à¤¨à¤¾',
-  'à¤¤à¥ˆà¤¯à¤¾à¤° à¤•à¤° à¤¦à¥‹', 'à¤¤à¥ˆà¤¯à¤¾à¤° à¤•à¤° à¤¦à¥‡à¤¨à¤¾', 'à¤ªà¥ˆà¤• à¤•à¤° à¤¦à¥‹', 'à¤ªà¥ˆà¤• à¤•à¤° à¤¦à¥‡à¤¨à¤¾', 'à¤ªà¥ˆà¤• à¤•à¤°à¤•à¥‡ à¤­à¥‡à¤œ à¤¦à¥‹',
-  'à¤°à¤– à¤¦à¥‡à¤¨à¤¾', 'à¤¡à¤¿à¤²à¥€à¤µà¤° à¤•à¤° à¤¦à¥‹', 'à¤˜à¤° à¤­à¥‡à¤œ', 'à¤•à¤¿à¤¤à¤¨à¥‡ à¤•à¤¾', 'à¤•à¤¿à¤¤à¤¨à¥‡ à¤®à¥‡à¤‚', 'à¤•à¤¿à¤¤à¤¨à¤¾ à¤²à¤—à¥‡à¤—à¤¾',
-  'à¤­à¤¾à¤µ à¤¬à¤¤à¤¾à¤“', 'à¤°à¥‡à¤Ÿ à¤•à¥à¤¯à¤¾', 'à¤ªà¥à¤°à¤¾à¤‡à¤¸ à¤¬à¤¤à¤¾à¤“', 'à¤Ÿà¥‹à¤Ÿà¤² à¤•à¤¿à¤¤à¤¨à¤¾', 'à¤‘à¤°à¥à¤¡à¤°',
-  'Ø¨Ú¾ÛŒØ¬ Ø¯Ùˆ', 'Ø¨Ú¾ÛŒØ¬ Ø¯ÛŒÚº', 'Ø¨Ù†Ø§ Ø¯Ùˆ', 'Ø¨Ù†Ø§ Ø¯ÛŒÚº', 'ØªÛŒØ§Ø± Ú©Ø± Ø¯Ùˆ', 'Ù¾ÛŒÚ© Ú©Ø± Ø¯Ùˆ', 'Ú¯Ú¾Ø± Ø¨Ú¾ÛŒØ¬',
-  'Ú©ØªÙ†Û’ Ú©Ø§', 'Ú©ØªÙ†Û’ Ù…ÛŒÚº', 'Ú©ØªÙ†Ø§ Ù„Ú¯Û’ Ú¯Ø§', 'Ù‚ÛŒÙ…Øª Ú©ÛŒØ§', 'Ø¨Ú¾Ø§Ø¤ Ú©ÛŒØ§', 'Ù¹ÙˆÙ¹Ù„ Ú©ØªÙ†Ø§', 'Ø¢Ø±ÚˆØ±', 'Ú†Ø§ÛÛŒÛ’',
-  'à¤ªà¤¾à¤¹à¤¿à¤œà¥‡', 'à¤ªà¤¾à¤ à¤µà¤¾', 'à¤ªà¤¾à¤ à¤µà¥‚à¤¨ à¤¦à¥à¤¯à¤¾', 'à¤¬à¤¨à¤µà¥‚à¤¨ à¤¦à¥à¤¯à¤¾', 'à¤¤à¤¯à¤¾à¤° à¤•à¤°à¥‚à¤¨', 'à¤ªà¥…à¤• à¤•à¤°à¥‚à¤¨',
-  'à¤•à¤¿à¤¤à¥€ à¤ªà¤¡à¥‡à¤²', 'à¤•à¤¿à¤¤à¥€ à¤¹à¥‹à¤ˆà¤²', 'à¤­à¤¾à¤µ à¤•à¤¾à¤¯', 'à¤°à¥‡à¤Ÿ à¤¸à¤¾à¤‚à¤—à¤¾', 'à¤•à¤¿à¤‚à¤®à¤¤ à¤¸à¤¾à¤‚à¤—à¤¾', 'à¤Ÿà¥‹à¤Ÿà¤² à¤•à¤¿à¤¤à¥€',
-  'à¦šà¦¾à¦‡', 'à¦…à¦°à§à¦¡à¦¾à¦°', 'à¦ªà¦¾à¦ à¦¿à¦¯à¦¼à§‡ à¦¦à¦¿à¦¨', 'à¦¬à¦¾à¦¨à¦¿à¦¯à¦¼à§‡ à¦¦à¦¿à¦¨', 'à¦¤à§ˆà¦°à¦¿ à¦•à¦°à§‡ à¦¦à¦¿à¦¨',
-  'à¦°à§‡à¦–à§‡ à¦¦à¦¿à¦¨', 'à¦ªà§à¦¯à¦¾à¦• à¦•à¦°à§‡ à¦¦à¦¿à¦¨', 'à¦•à¦¤ à¦ªà¦¡à¦¼à¦¬à§‡', 'à¦•à¦¤ à¦¹à¦¬à§‡', 'à¦¦à¦¾à¦® à¦•à¦¤', 'à¦•à¦¤ à¦Ÿà¦¾à¦•à¦¾', 'à¦Ÿà§‹à¦Ÿà¦¾à¦² à¦•à¦¤',
-  'à®µà¯‡à®£à¯à®Ÿà¯à®®à¯', 'à®†à®°à¯à®Ÿà®°à¯', 'à®…à®©à¯à®ªà¯à®ªà¯à®™à¯à®•', 'à®…à®©à¯à®ªà¯à®ªà®¿ à®µà®¿à®Ÿà¯à®™à¯à®•', 'à®šà¯†à®žà¯à®šà¯ à®•à¯à®Ÿà¯à®™à¯à®•',
-  'à®°à¯†à®Ÿà®¿ à®ªà®£à¯à®£à¯à®™à¯à®•', 'à®ªà¯‡à®•à¯ à®ªà®£à¯à®£à¯à®™à¯à®•', 'à®µà¯€à®Ÿà¯à®Ÿà¯à®•à¯à®•à¯ à®…à®©à¯à®ªà¯à®ªà¯à®™à¯à®•',
-  'à®Žà®µà¯à®µà®³à®µà¯ à®†à®•à¯à®®à¯', 'à®Žà®µà¯à®µà®³à®µà¯ à®µà®°à¯à®®à¯', 'à®°à¯‡à®Ÿà¯ à®Žà®©à¯à®©', 'à®µà®¿à®²à¯ˆ à®Žà®©à¯à®©', 'à®Ÿà¯‹à®Ÿà¯à®Ÿà®²à¯ à®Žà®µà¯à®µà®³à®µà¯',
-  'à°•à°¾à°µà°¾à°²à°¿', 'à°†à°°à±à°¡à°°à±', 'à°ªà°‚à°ªà°‚à°¡à°¿', 'à°ªà°‚à°ªà°¿à°‚à°šà±‡à°¯à°‚à°¡à°¿', 'à°‡à°µà±à°µà°‚à°¡à°¿', 'à°‡à°šà±à°šà±‡à°¯à°‚à°¡à°¿',
-  'à°¤à°¯à°¾à°°à± à°šà±‡à°¯à°‚à°¡à°¿', 'à°°à±†à°¡à±€ à°šà±‡à°¯à°‚à°¡à°¿', 'à°ªà±à°¯à°¾à°•à± à°šà±‡à°¯à°‚à°¡à°¿',
-  'à°Žà°‚à°¤ à°…à°µà±à°¤à±à°‚à°¦à°¿', 'à°Žà°‚à°¤ à°ªà°¡à±à°¤à±à°‚à°¦à°¿', 'à°°à±‡à°Ÿà± à°Žà°‚à°¤', 'à°§à°° à°Žà°‚à°¤', 'à°Ÿà±‹à°Ÿà°²à± à°Žà°‚à°¤',
-  'à²¬à³‡à²•à³', 'à²†à²°à³à²¡à²°à³', 'à²•à²³à²¿à²¸à²¿', 'à²•à²³à³à²¹à²¿à²¸à²¿', 'à²®à²¨à³†à²—à³† à²•à²³à²¿à²¸à²¿', 'à²¤à²¯à²¾à²°à²¿à²¸à²¿ à²•à³Šà²¡à²¿',
-  'à²‡à²Ÿà³à²Ÿà³ à²•à³Šà²¡à²¿', 'à²°à³†à²¡à²¿ à²®à²¾à²¡à²¿', 'à²ªà³à²¯à²¾à²•à³ à²®à²¾à²¡à²¿',
-  'à²Žà²·à³à²Ÿà³ à²†à²—à³à²¤à³à²¤à³†', 'à²Žà²·à³à²Ÿà³ à²¬à²°à³à²¤à³à²¤à³†', 'à²¬à³†à²²à³† à²Žà²·à³à²Ÿà³', 'à²°à³‡à²Ÿà³ à²Žà²·à³à²Ÿà³', 'à²Ÿà³‹à²Ÿà²²à³ à²Žà²·à³à²Ÿà³',
-  'à´µàµ‡à´£à´‚', 'à´“àµ¼à´¡àµ¼', 'à´…à´¯à´šàµà´šàµ à´¤à´°àµ‚', 'à´…à´¯à´•àµà´•àµ‚', 'à´šàµ†à´¯àµà´¤àµ à´¤à´°àµ‚', 'à´‰à´£àµà´Ÿà´¾à´•àµà´•à´¿ à´¤à´°àµ‚',
-  'à´ªà´¾à´•àµà´•àµ à´šàµ†à´¯àµà´¤àµ à´¤à´°àµ‚', 'à´µàµ€à´Ÿàµà´Ÿà´¿àµ½ à´…à´¯à´•àµà´•àµ‚',
-  'à´Žà´¤àµà´° à´†à´•àµà´‚', 'à´Žà´¤àµà´° à´µà´°àµà´‚', 'à´µà´¿à´² à´Žà´¤àµà´°', 'à´±àµ‡à´±àµà´±àµ à´Žà´¤àµà´°', 'à´Ÿàµ‹à´Ÿàµà´Ÿàµ½ à´Žà´¤àµà´°',
-  'àªœà«‹àªˆàª', 'àª“àª°à«àª¡àª°', 'àª®à«‹àª•àª²à«€ àª¦à«‹', 'àª®à«‹àª•àª²à«€ àª†àªªà«‹', 'àª†àªªà«€ àª¦à«‹', 'àª†àªªà«€ àª†àªªà«‹', 'àª¬àª¨àª¾àªµà«€ àª†àªªà«‹',
-  'àª¤à«ˆàª¯àª¾àª° àª•àª°à«€', 'àª°à«‡àª¡à«€ àª•àª°à«€', 'àªªà«‡àª• àª•àª°à«€', 'àª°àª¾àª–à«€ àª¦à«‹',
-  'àª•à«‡àªŸàª²àª¾ àª¥àª¶à«‡', 'àª•à«‡àªŸàª²à«àª‚ àªªàª¡àª¶à«‡', 'àª­àª¾àªµ àª•à«‡àªŸàª²à«‹', 'àª°à«‡àªŸ àª•à«‡àªŸàª²à«‹', 'àªŸà«‹àªŸàª² àª•à«‡àªŸàª²à«àª‚',
-  'à¨šà¨¾à¨¹à©€à¨¦à¨¾', 'à¨†à¨°à¨¡à¨°', 'à¨­à©‡à¨œ à¨¦à¨¿à¨“', 'à¨¬à¨£à¨¾ à¨¦à¨¿à¨“', 'à¨¤à¨¿à¨†à¨° à¨•à¨° à¨¦à¨¿à¨“', 'à¨°à©ˆà¨¡à©€ à¨•à¨° à¨¦à¨¿à¨“',
-  'à¨ªà©ˆà¨• à¨•à¨° à¨¦à¨¿à¨“', 'à¨°à©±à¨– à¨¦à¨¿à¨“', 'à¨•à¨¿à©°à¨¨à©‡ à¨¦à¨¾', 'à¨•à¨¿à©°à¨¨à©‡ à¨ªà©ˆà¨¸à©‡', 'à¨°à©‡à¨Ÿ à¨•à©€', 'à¨­à¨¾à¨… à¨•à©€', 'à¨Ÿà©‹à¨Ÿà¨² à¨•à¨¿à©°à¨¨à¨¾',
-];
-const NATIVE_UNITS = [
-  'à¤•à¤¿à¤²à¥‹', 'à¤•à¥‡à¤œà¥€', 'à¤•à¤¿à¤²à¥‹à¤—à¥à¤°à¤¾à¤®', 'à¤•à¤¿à¤²à¥‹à¤—à¥à¤°à¥…à¤®', 'à¦•à¦¿à¦²à§‹', 'à¦•à§‡à¦œà¦¿', 'à¦•à¦¿à¦²à§‹à¦—à§à¦°à¦¾à¦®', 'à®•à®¿à®²à¯‹', 'à®•à®¿à®²à¯‹à®•à®¿à®°à®¾à®®à¯',
-  'à°•à°¿à°²à±‹', 'à°•à°¿à°²à±‹à°—à±à°°à°¾à°®à±', 'à°•à±‡à°œà±€', 'à²•à²¿à²²à³‹', 'à²•à²¿à²²à³‹à²—à³à²°à²¾à²‚', 'à²•à³†à²œà²¿', 'à´•à´¿à´²àµ‹', 'à´•à´¿à´²àµ‹à´—àµà´°à´¾à´‚',
-  'àª•àª¿àª²à«‹', 'àª•àª¿àª²à«‹àª—à«àª°àª¾àª®', 'à¨•à¨¿à¨²à©‹', 'à¨•à¨¿à¨²à©‹à¨—à©à¨°à¨¾à¨®', 'à¨•à©‡à¨œà©€', 'Ú©Ù„Ùˆ', 'Ú©Ù„ÙˆÚ¯Ø±Ø§Ù…',
-  'à¤—à¥à¤°à¤¾à¤®', 'à¤—à¥à¤°à¥…à¤®', 'à¦—à§à¦°à¦¾à¦®', 'à®•à®¿à®°à®¾à®®à¯', 'à°—à±à°°à°¾à°®à±', 'à²—à³à²°à²¾à²‚', 'à²—à³à²°à²¾à²®', 'à´—àµà´°à´¾à´‚', 'àª—à«àª°àª¾àª®', 'à¨—à©à¨°à¨¾à¨®', 'Ú¯Ø±Ø§Ù…',
-  'à¤¤à¥‹à¤²à¤¾', 'à¤¤à¥‹à¤³à¤¾', 'à¤¤à¥‹à¤³', 'à¤°à¤¤à¥à¤¤à¥€', 'à¤›à¤Ÿà¤¾à¤‚à¤•', 'à¦šà¦Ÿà¦•', 'à¦­à¦°à¦¿', 'à¦¤à§‹à¦²à¦¾', 'à®¤à¯‹à®²à®¾', 'à®¤à¯‹à®²à¯ˆ',
-  'à°¤à±à°²à°‚', 'à°¤à±à°²à°¾', 'à²¤à³Šà²²', 'à²¤à³Šà²²à³†', 'à²°à²¤à³à²¤à²¿', 'à´¤àµŠà´²', 'à´°à´¤àµà´¤à´¿', 'àª¤à«‹àª²àª¾', 'àª¤à«‹àª²', 'àª°àª¤à«€',
-  'à¨¤à©‹à¨²à¨¾', 'à¨¤à©‹à¨²', 'à¨°à©±à¨¤à©€', 'ØªÙˆÙ„Û', 'ØªÙˆÙ„', 'Ø±ØªÛŒ', 'Ù…Ø§Ø´Û',
-  'à¤²à¤¿à¤Ÿà¤°', 'à¦²à¦¿à¦Ÿà¦¾à¦°', 'à®²à®¿à®Ÿà¯à®Ÿà®°à¯', 'à°²à±€à°Ÿà°°à±', 'à²²à³€à²Ÿà²°à³', 'à´²à´¿à´±àµà´±àµ¼', 'àª²à«€àªŸàª°', 'à¨²à©€à¨Ÿà¨°', 'Ù„ÛŒÙ¹Ø±',
-  'à¤®à¤¿à¤²à¥€à¤²à¥€à¤Ÿà¤°', 'à¤®à¤¿à¤²à¥€',
-  'à¤ªà¥€à¤¸', 'à¤¨à¤—', 'à¦ªà¦¿à¦¸', 'à¦Ÿà¦¾', 'à®ªà¯€à®¸à¯', 'à°ªà±€à°¸à±', 'à°®à±à°•à±à°•', 'à²ªà³€à²¸à³', 'à²à²Ÿà²‚', 'à´Žà´£àµà´£à´‚', 'àªªà«€àª¸', 'àª¨àª‚àª—', 'à¨ªà©€à¨¸', 'à¨¨à¨—', 'Ù¾ÛŒØ³', 'Ø¹Ø¯Ø¯',
-  'à¤¦à¤°à¥à¤œà¤¨', 'à¤¡à¤à¤¨', 'à¦¡à¦œà¦¨', 'à®Ÿà®œà®©à¯', 'à°¡à°œà°¨à±', 'à²¡à²œà²¨à³', 'à´¡à´¸àµ»', 'àª¡àªàª¨', 'à¨¦à¨°à¨œà¨¨', 'Ø¯Ø±Ø¬Ù†',
-  'à°•à°¿à°²à±‹à°²à±', 'à°•à°¿à°²à±‹à°²', 'à°—à±à°°à°¾à°®à±à°²à±', 'à°—à±à°°à°¾à°®à±à°²', 'à°²à±€à°Ÿà°°à±à°²à±', 'à°¡à°œà°¨à±à°²à±',
-  'à¤¸à¥‡à¤°', 'à¤¶à¥‡à¤°', 'à¦¸à§‡à¦°', 'à¦ªà§‹à¦¯à¦¼à¦¾', 'à®šà¯‡à®°à¯', 'à®ªà®Ÿà®¿', 'à°¸à±‡à°°à±', 'à²¸à³‡à²°à³', 'à´¸àµ‡àµ¼', 'àª¶à«‡àª°', 'à¨¸à©‡à¨°', 'Ø³ÛŒØ±',
-  'à¤ªà¤¾à¤µ', 'à®ªà®¾à®µà¯', 'à°ªà°¾à°µà±', 'à²ªà²¾à²µà³', 'à´ªà´¾à´µàµ', 'àªªàª¾àªµ', 'à¨ªà¨¾à¨µ', 'Ù¾Ø§Ø¤',
-];
-const NATIVE_UNIT_MAP = (() => {
-  const groups = [
-    ['à¤•à¤¿à¤²à¥‹ à¤•à¥‡à¤œà¥€ à¤•à¤¿à¤²à¥‹à¤—à¥à¤°à¤¾à¤® à¤•à¤¿à¤²à¥‹à¤—à¥à¤°à¥…à¦® à¦•à¦¿à¦²à§‹ à¦•à§‡à¦œà¦¿ à¦•à¦¿à¦²à§‹à¦—à§à¦°à¦¾à¦® à®•à®¿à®²à¯‹ à®•à®¿à®²à¯‹à®•à®¿à®°à®¾à®®à¯ à°•à°¿à°²à±‹ à°•à°¿à°²à±‹à°—à±à°°à°¾à°®à± à°•à±‡à°œà±€ à²•à²¿à²²à³‹ à²•à²¿à²²à³‹à²—à³à²°à²¾à²‚ à²•à³†à²œà²¿ à´•à´¿à´²àµ‹ à´•à´¿à´²àµ‹à´—àµà´°à´¾à´‚ àª•àª¿àª²à«‹ àª•àª¿àª²à«‹àª—à«àª°àª¾àª® à¨•à¨¿à¨²à©‹ à¨•à¨¿à¨²à©‹à¨—à©à¨°à¨¾à¨® à¨•à©‡à¨œà©€ Ú©Ù„Ùˆ Ú©Ù„ÙˆÚ¯Ø±Ø§Ù…', 'kg'],
-    ['à¤—à¥à¤°à¤¾à¤® à¤—à¥à¤°à¥…à¤® à¦—à§à¦°à¦¾à¦® à®•à®¿à®°à®¾à®®à¯ à°—à±à°°à°¾à°®à± à²—à³à²°à²¾à²‚ à²—à³à²°à²¾à²® à´—àµà´°à´¾à´‚ àª—à«àª°àª¾àª® à¨—à©à¨°à¨¾à¨® Ú¯Ø±Ø§Ù… à¤¤à¥‹à¤²à¤¾ à¤¤à¥‹à¤³à¤¾ à¤¤à¥‹à¤³ à¤°à¤¤à¥à¤¤à¥€ à¤›à¤Ÿà¤¾à¤‚à¤• à¦­à¦°à¦¿ à¦¤à§‹à¦²à¦¾ à®¤à¯‹à®²à®¾ à®¤à¯‹à®²à¯ˆ à°¤à±à°²à°‚ à°¤à±à°²à°¾ à²¤à³Šà²² à²¤à³Šà²²à³† à²°à²¤à³à²¤à²¿ à´¤àµŠà´² à´°à´¤àµà´¤àª¿ àª¤à«‹àª²àª¾ àª¤à«‹àª² àª°àª¤à«€ à¨¤à©‹à¨²à¨¾ à¨¤à©‹à¨² à¨°à©±à¨¤à©€ ØªÙˆÙ„Û ØªÙˆÙ„ Ø±ØªÛŒ Ù…Ø§Ø´Û', 'g'],
-    ['à¤²à¥€à¤Ÿà¤° à¦²à¦¿à¦Ÿà¦¾à¦° à®²à®¿à®Ÿà¯à®Ÿà®°à¯ à°²à±€à°Ÿà°°à± à²²à³€à²Ÿà²°à³ à´²à´¿à´±àµà´±àµ¼ àª²à«€àªŸàª° à¨²à©€àªŸàª° Ù„ÛŒÙ¹Ø±', 'l'],
-  ['à¤®à¤¿à¤²à¥€à¤²à¥€à¤Ÿà¤° à¤®à¤¿à¤²à¥€', 'ml'],
-    ['à¤ªà¥€à¤¸ à¤¨à¤— à¦ªà¦¿à¦¸ à¦Ÿà¦¾ à®ªà¯€à®¸à¯ à°ªà±€à°¸à± à°®à±à°•à±à°• à²ªà³€à²¸à³ à²à²Ÿà²‚ à´Žà´£àµà´£à´‚ àªªà«€àª¸ àª¨àª‚àª— à¨ªà©€à¨¸ à¨¨à¨— Ù¾ÛŒØ³ Ø¹Ø¯Ø¯', 'pcs'],
-    ['à¤¦à¤°à¥à¤œà¤¨ à¤¡à¤à¤¨ à¦¡à¦œà¦¨ à®Ÿà®œà®©à¯ à°¡à°œà²¨à³ à²¡à²œà²¨à³ à´¡à´¸àµ» àª¡àªàª¨ à¨¦àª°à¯à®œàª¨ Ø¯Ø±Ø¬Ù†', 'dozen'],
-    ['à°•à°¿à°²à±‹à°²à± à°•à°¿à°²à±‹à°² à°—à±à°°à°¾à°®à±à°²à± à°—à±à°°à°¾à°®à±à°² à°²à±€à°Ÿà°°à±à°²à± à°¡à°œà°¨à±à°²à±', 'dozen'],
-    ['à¤¸à¥‡à¤° à¤¶à¥‡à¤° à¦¸à§‡à¦° à¦ªà§‹à¦¯à¦¼à¦¾ à®šà¯‡à®°à¯ à®ªà®Ÿà®¿ à°¸à±‡à°°à± à²¸à³‡à²°à³ à´¸àµ‡àµ¼ àª¶à«‡àª° à¨¸à©‡à¨° Ø³ÛŒØ± à¤ªà¤¾à¤µ à®ªà®¾à®µà¯ à°ªà°¾à°µà± à²ªà²¾à²µà³ à´ªà´¾à´µàµ àªªàª¾àªµ à¨ªà¦¾à¦¾à¨µ Ù¾Ø§Ø¤', 'kg'],
-  ];
-  const m = {};
-  for (const [words, c] of groups) for (const w of words.split(' ')) if (w) m[w] = c;
-  return m;
-})();
-
-const B = '(?<![\\p{L}\\p{M}])';
-const A = '(?![\\p{L}\\p{M}])';
-const NATIVE_INTENT_RE = new RegExp(`${B}(?:${NATIVE_INTENT.join('|')})${A}`, 'u');
-const NATIVE_QUANTITY_RE = new RegExp(`${B}([${NATIVE_DIGITS}]+)\\s*(${NATIVE_UNITS.join('|')})${A}`, 'u');
-// The most common real-world mix: ASCII digits + native unit ("500 à®•à®¿à®°à®¾à®®à¯", "2 à¤•à¤¿à¤²à¥‹")
-const MIXED_QUANTITY_RE = new RegExp(`${B}(\\d+(?:\\.\\d+)?)\\s*(${NATIVE_UNITS.join('|')})${A}`, 'u');
-// Devanagari spoken fractions: "à¤†à¤§à¤¾ à¤•à¤¿à¤²à¥‹", "à¤¡à¥‡à¤¢à¤¼ à¤•à¤¿à¤²à¥‹"...
-const NATIVE_FRACTION_RE = new RegExp(`${B}(à¤†à¤§à¤¾|à¤…à¤°à¥à¤§à¤¾|à¤†à¤°à¥à¤§à¤¾|à¤¸à¤µà¤¾|à¤¡à¥‡à¤¢à¤¼|à¤¢à¤¾à¤ˆ)\\s*(à¤•à¤¿à¤²à¥‹|à¤•à¥‡à¤œà¥€|à¤—à¥à¤°à¤¾à¤®|à¤²à¥€à¤Ÿà¤°)${A}`, 'u');
-const NATIVE_FRACTION_VALUES = { 'à¤†à¤§à¤¾': 0.5, 'à¤…à¤°à¥à¤§à¤¾': 0.5, 'à¤†à¤°à¥à¤§à¤¾': 0.5, 'à¤¸à¤µà¤¾': 1.25, 'à¤¡à¥‡à¤¢à¤¼': 1.5, 'à¤¢à¤¾à¤ˆ': 2.5 };
-const NATIVE_ITEM_TAIL_RE = new RegExp(
-  `\\s*(?:${['à¤šà¤¾à¤¹à¤¿à¤', 'à¤­à¥‡à¤œ à¤¦à¥‹', 'à¤­à¥‡à¤œ à¤¦à¥‡à¤¨à¤¾', 'à¤¦à¥‡ à¤¦à¥‹', 'à¤¦à¥‡ à¤¦à¥‡à¤¨à¤¾', 'à¤¬à¤¨à¤¾ à¤¦à¥‹', 'à¤¬à¤¨à¤¾ à¤¦à¥‡à¤¨à¤¾', 'à¤°à¤– à¤¦à¥‹', 'à¤ªà¥ˆà¤• à¤•à¤° à¤¦à¥‹', 'à¤¤à¥ˆà¤¯à¤¾à¤° à¤•à¤° à¤¦à¥‹', 'à¤˜à¤° à¤­à¥‡à¤œ', 'à¤¡à¤¿à¤²à¥€à¤µà¤° à¤•à¤° à¤¦à¥‹', 'à¤ªà¤¾à¤¹à¤¿à¤œà¥‡', 'à¤ªà¤¾à¤ à¤µà¤¾', 'à¤ªà¤¾à¤ à¤µà¥‚à¤¨ à¤¦à¥à¤¯à¤¾', 'à¦¬à¦¾à¦¨à¦¿à¦¯à¦¼à§‡ à¦¦à¦¿à¦¨', 'à¦¤à§ˆà¦°à¦¿ à¦•à¦°à§‡ à¦¦à¦¿à¦¨', 'à¦°à§‡à¦–à§‡ à¦¦à¦¿à¦¨', 'à¦ªà§à¦¯à¦¾à¦• à¦•à¦°à§‡ à¦¦à¦¿à¦¨', 'à¦ªà¦¾à¦ à¦¿à¦¯à¦¼à§‡ à¦¦à¦¿à¦¨', 'à®µà¯‡à®£à¯à®Ÿà¯à®®à¯', 'à®…à®©à¯à®ªà¯à®ªà¯à®™à¯à®•', 'à®•à¯à®Ÿà¯à®™à¯à®•', 'à®šà¯†à®žà¯à®šà¯ à®•à¯à®Ÿà¯à®™à¯à®•', 'à®°à¯†à®Ÿà®¿ à®ªà®£à¯à®£à¯à®™à¯à®•', 'à®ªà¯‡à®•à¯ à®ªà®£à¯à®£à¯à®™à¯à®•', 'à°•à°¾à°µà°¾à°²à°¿', 'à°ªà°‚à°ªà°‚à°¡à°¿', 'à°‡à°µà±à°µà°‚à°¡à°¿', 'à°¤à°¯à°¾à°°à± à°šà±‡à°¯à°‚à°¡à°¿', 'à°°à±†à°¡à±€ à°šà±‡à°¯à°‚à°¡à°¿', 'à°ªà±à°¯à°¾à°•à± à°šà±‡à°¯à°‚à°¡à°¿', 'à²¬à³‡à²•à³', 'à²•à²³à²¿à²¸à²¿', 'à²•à³Šà²¡à²¿', 'à²¤à²¯à²¾à²°à²¿à²¸à²¿ à²•à³Šà²¡à²¿', 'à²°à³†à²¡à²¿ à²®à²¾à²¡à²¿', 'à²ªà³à²¯à²¾à²•à³ à²®à²¾à²¡à²¿', 'à´µàµ‡à´£à´‚', 'à´¤à´°àµ‚', 'à´…à´¯à´•àµà´•àµ‚', 'à´šàµ†à´¯àµà´¤àµ à´¤à´°àµ‚', 'à´‰à´£àµà´Ÿà´¾à´•àµà´•à´¿ à´¤à´°àµ‚', 'à´ªà´¾à´•àµà´•àµ à´šàµ†à´¯àµà´¤àµ à´¤à´°àµ‚', 'àªœà«‹àªˆàª', 'àª®à«‹àª•àª²à«€ àª¦à«‹', 'àª†àªªà«€ àª¦à«‹', 'àª¬àª¨àª¾àªµà«€ àª†àªªà«‹', 'àª¤à«ˆàª¯àª¾àª° àª•àª°à«€ àª†àªªà«‹', 'àª°à«‡àª¡à«€ àª•àª°à«€ àª¦à«‹', 'àªªà«‡àª• àª•àª°à«€ àª¦à«‹', 'àª°àª¾àª–à«€ àª¦à«‹', 'à¨šà¨¾à¨¹à©€à¨¦à¨¾', 'à¨­à©‡à¨œ à¨¦à¨¿à¨“', 'à¨¦à©‡ à¨¦à¨¿à¨“', 'à¨¬à¨£à¨¾ à¨¦à¨¿à¨“', 'à¨¤à¨¿à¨†à¨° à¨•à¨° à¨¦à¨¿à¨“', 'à¨ªà©ˆà¨• à¨•à¨° à¨¦à¨¿à¨“', 'à¨°à©±à¨– à¨¦à¨¿à¨“', 'Ú†Ø§ÛÛŒÛ’', 'Ø¨Ú¾ÛŒØ¬ Ø¯Ùˆ', 'Ø¯Û’ Ø¯Ùˆ', 'Ø¨Ù†Ø§ Ø¯Ùˆ', 'ØªÛŒØ§Ø± Ú©Ø± Ø¯Ùˆ', 'Ù¾ÛŒÚ© Ú©Ø± Ø¯Ùˆ', 'Ú¯Ú¾Ø± Ø¨Ú¾ÛŒØ¬ Ø¯Ùˆ'].join('|')})${A}.*$`,
-  'u'
-);
-
-// Customer name: tried in priority order, first match wins
-const CUSTOMER_RES = [
-  /order\s*from\s+([A-Za-z][A-Za-z .]{1,30}?)(?=\s*[,.!]|$|\s+\d|\s+cost|\s+price|\s+profit|\s+\+)/i,
-  /(?:customer|client)\s*[:\-]\s*([A-Za-z][A-Za-z .]{1,30}?)(?=\s*[,.!]|$|\s+\d|\s+cost|\s+price|\s+profit)/i,
-  /\bsold\b[^,.]*?\bto\s+([A-Za-z][A-Za-z .]{1,30}?)(?=\s*[,.!]|$|\s+\d|\s+cost|\s+price|\s+profit)/i,
-  /\bfor\s+([A-Za-z][A-Za-z .]{1,30}?)(?=\s*[,.!]|$|\s+\d|\s+cost|\s+price|\s+profit)/i,
-  /\b([A-Za-z][A-Za-z ]{1,30}?)\s+ne\b/i, // Hinglish: "ravi kirana ne 5kg namkeen mange"
-];
-
-const UNIT_NORMALIZE = {
-  kg: 'kg', kgs: 'kg', kilogram: 'kg', kilograms: 'kg', kilo: 'kg', kilos: 'kg', keji: 'kg',
-  gram: 'g', grams: 'g', graam: 'g', gms: 'g', gm: 'g', g: 'g',
-  dozen: 'dozen', darjan: 'dozen',
-  pcs: 'pcs', pieces: 'pcs', piece: 'pcs', pees: 'pcs', pis: 'pcs', pc: 'pcs', nag: 'pcs',
-  ennam: 'pcs', ennikkai: 'pcs', mukka: 'pcs', item: 'pcs', ta: 'pcs',
-  litre: 'l', litres: 'l', liter: 'l', liters: 'l', l: 'l',
-  ml: 'ml', millilitre: 'ml', millilitres: 'ml', milliliter: 'ml', milliliters: 'ml',
-  ser: 'kg', seer: 'kg', sher: 'kg', pav: 'kg', paav: 'kg', poa: 'kg',
-  tola: 'g', thola: 'g', tol: 'g', ratti: 'g', chatak: 'g', chhatank: 'g', masha: 'g', vori: 'g',
-};
-
-const ITEM_TAIL_STOP = /\s+(?:mange|mangwaya|mangaye|chahiye|bhejo|bhejna|bhej|dena|dein|deo|karo|krdo|please|ke\s+liye|pahije|pathva|banvun|kavali|beku|venam|venum|chahida|joie|kalisi|kaluhisi|anuppunga|pampandi|kudunga|tharu|pathan|din|dya|venam|bana do|bana dena|de do|de dena|bhej do|bhej dena|taiyar kar do|pack kar do|pathavun dya|banvun dya|pathiye din|baniye din|pack kore din|rekhe din|ready pannunga|pack pannunga|pampincheyandi|ivvandi|ready cheyandi|pack cheyandi|ready madi|pack madi|ittu kodi|madi kodi|ayachu tharu|ayach tharu|cheithu tharu|undakki tharu|pack cheythu|mokli do|mokli aapo|aapi do|banavi aapo|ready kari do|pack kari do|rakhi do|bhej deo|bana deo|de deo|tyaar kar deo|ready kar deo|pack kar deo|rakh deo|bhej dein|de dein|bana dein|tayyar kar dein|delivery kar do)\b.*$/i;
-
-const toNum = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : null; };
-function titleCase(name) {
-  return name.toLowerCase().split(/\s+/).filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1)).join(' ');
-}
-function extractCustomer(text) {
-  for (const re of CUSTOMER_RES) {
-    const m = text.match(re);
-    if (m && m[1]) {
-      const name = m[1].replace(/\b(cost|price|profit|rs|rupees|total|ne)\b\s*$/i, '').trim();
-      if (name) return titleCase(name);
-    }
-  }
-  return null;
-}
-function extractItem(text, qtyMatch) {
-  if (!qtyMatch) return null;
-  const before = text.slice(Math.max(0, qtyMatch.index - 40), qtyMatch.index);
-  const after = text.slice(qtyMatch.index + qtyMatch[0].length, qtyMatch.index + qtyMatch[0].length + 40);
-  let m = after.match(/^\s*(?:ke\s+|ka\s+|ki\s+|of\s+)?([a-z][a-z ]{1,25}?)(?=\s*[,.!=]|$|\s+\d|\s+cost|\s+price|\s+profit|\s+for|\s+sold|\s+to\b|\s+ne\b)/i);
-  if (m && m[1].trim()) return m[1].trim().replace(ITEM_TAIL_STOP, '').replace(NATIVE_ITEM_TAIL_RE, '').replace(/\s+/g, ' ');
-  m = before.match(/([a-z][a-z]{2,24})\s*(?:ke|ka|ki|of)?\s*$/i);
-  if (m && !/^(from|order|total|cost|price|profit|for|sold|sell)$/i.test(m[1])) return m[1].trim();
-  return null;
-}
-function matchQuantity(text) {
-  const qtyMatch = text.match(QUANTITY_RE);
-  if (qtyMatch) {
-    return {
-      quantity: toNum(qtyMatch[1]),
-      unit: UNIT_NORMALIZE[qtyMatch[2].toLowerCase()] || null,
-      match: qtyMatch,
-    };
-  }
-  const nq = text.match(NATIVE_QUANTITY_RE);
-  if (nq) {
-    return {
-      quantity: toNum(normalizeDigits(nq[1])),
-      unit: NATIVE_UNIT_MAP[nq[2]] || null,
-      match: nq,
-    };
-  }
-  const mq = text.match(MIXED_QUANTITY_RE);
-  if (mq) {
-    return {
-      quantity: toNum(mq[1]),
-      unit: NATIVE_UNIT_MAP[mq[2]] || null,
-      match: mq,
-    };
-  }
-  const nfq = text.match(NATIVE_FRACTION_RE);
-  if (nfq) {
-    return {
-      quantity: NATIVE_FRACTION_VALUES[nfq[1]] || null,
-      unit: NATIVE_UNIT_MAP[nfq[2]] || null,
-      match: nfq,
-    };
-  }
-  const fq = text.match(FRACTION_QTY_RE);
-  if (fq) {
-    return {
-      quantity: FRACTION_VALUES[fq[1].toLowerCase()] || null,
-      unit: UNIT_NORMALIZE[fq[2].toLowerCase()] || null,
-      match: fq,
-    };
-  }
-  // Bare number, no unit: "bhai 10 laddu chahiye". Numbers already claimed
-  // by a price/profit/total pattern ("cost 60", "total 230") never qualify.
-  const bare = matchBareNumber(text);
-  if (bare) return bare;
-  return null;
-}
-
-function matchBareNumber(text) {
-  const taken = [];
-  for (const re of [COST_RE, SOLD_FOR_RE, PROFIT_PCT_RE, PROFIT_PCT_WORD_RE, PROFIT_AMT_RE, TOTAL_RE]) {
-    const m = text.match(re);
-    if (m && m.index != null && m[1] != null) {
-      const at = m[0].indexOf(String(m[1]));
-      if (at >= 0) taken.push([m.index + at, m.index + at + String(m[1]).length]);
-    }
-  }
-  BARE_NUMBER_RE.lastIndex = 0;
-  let m;
-  while ((m = BARE_NUMBER_RE.exec(text))) {
-    const s = m.index, e = s + m[0].length;
-    if (taken.some(([a, b]) => s < b && e > a)) continue;
-    return { quantity: toNum(m[0]), unit: null, match: m, bare: true };
-  }
-  return null;
-}
-
-function parseWithRegex(text) {
-  if (!text) return null;
-  const customer = extractCustomer(text);
-  const qty = matchQuantity(text);
-  const quantity = qty ? qty.quantity : null;
-  const unit = qty ? qty.unit : null;
-  const item = extractItem(text, qty ? qty.match : null);
-  const hasIntent = ROMAN_INTENT_RE.test(text) || NATIVE_INTENT_RE.test(text);
-  // A bare number ("10 laddu") counts only with an intent word ("chahiye") -
-  // without one it's too loose ("I have 10 laddu at home" is not an order).
-  const bareOrder = quantity != null && item != null && item.trim() !== '' && (!(qty && qty.bare) || hasIntent);
-  if (!hasIntent && !bareOrder) return null;
-  let costPrice = null, totalAmount = null, profitPercent = null, profitAmount = null;
-  const cm = text.match(COST_RE); if (cm) costPrice = toNum(cm[1]);
-  const pd = text.match(PROFIT_PCT_RE);
-  const pw = text.match(PROFIT_PCT_WORD_RE);
-  if (pd) profitPercent = toNum(pd[1]); else if (pw) profitPercent = toNum(pw[1]);
-  const pa = text.match(PROFIT_AMT_RE); if (pa) profitAmount = toNum(pa[1]);
-  const sm = text.match(SOLD_FOR_RE); if (sm) totalAmount = toNum(sm[1]);
-  const tm = text.match(TOTAL_RE); if (tm) totalAmount = toNum(tm[1]);
-  if (costPrice == null && totalAmount == null && quantity == null) return null;
-  if (costPrice != null && profitPercent != null && profitAmount == null) profitAmount = round2((costPrice * profitPercent) / 100);
-  if (costPrice != null && totalAmount == null && profitAmount != null) totalAmount = round2(costPrice + profitAmount);
-  if (totalAmount != null && costPrice != null && profitAmount == null) profitAmount = round2(totalAmount - costPrice);
-  if (costPrice != null && profitAmount != null && profitPercent == null && costPrice > 0) profitPercent = round2((profitAmount / costPrice) * 100);
-  if (totalAmount == null && costPrice != null && profitAmount == null) totalAmount = costPrice;
-  return { customer, item, quantity, unit, costPrice, profitPercent, profitAmount, totalAmount, source: 'regex', raw: text };
-}
+// Shared with the desktop engine (src/parser.js) so native-script handling
+// (Devanagari, Bengali, Tamil, Telugu, Kannada, Malayalam, Gujarati, Gurmukhi,
+// Urdu) stays in one place and both entry points behave identically.
+const { parseOrder: parseWithRegex } = require('../src/parser');
 
 async function parseOrder(text) {
   if (POOLSIDE_API_KEY) {
@@ -658,8 +405,8 @@ function loadContacts() {
   } catch {}
 }
 loadContacts();
-/** WhatsApp reports masked phones ("+91â€¦â€¦â€¦39") as chat/profile display names - never treat those as names. */
-function isMaskedName(name) { return /[â€¢â€¦]/.test(String(name || '')); }
+/** WhatsApp reports masked phones ("+91………39") as chat/profile display names - never treat those as names. */
+function isMaskedName(name) { return /[•…]/.test(String(name || '')); }
 function rememberContact(c) {
   if (!c || !c.id || !c.name || isMaskedName(c.name)) return;
   contactNames.set(c.id, c.name);
@@ -708,7 +455,7 @@ function scheduleNameBackfill(orderId, jid) {
 
 /**
  * Sender display: saved contact name -> real phone number. Never the WhatsApp
- * profile/display name (it's often a masked "+91â€¦â€¦â€¦39" or a random nickname).
+ * profile/display name (it's often a masked "+91⬦⬦⬦39" or a random nickname).
  */
 function resolveSenderName(jid, pushName) {
   void pushName; // intentionally unused - display names are not shown

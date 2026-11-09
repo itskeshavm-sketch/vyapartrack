@@ -18,7 +18,17 @@ require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const QRCode = require('qrcode');
 const pino = require('pino');
 const { WaClient, createStore } = require('zapo-js');
-const { createSqliteStore } = require('@zapo-js/store-sqlite');
+
+// SQLite is optional: it keeps the WhatsApp link across restarts, but it needs
+// a native better-sqlite3 build. Without it the bot still works using zapo-js's
+// in-memory store (the user re-links after a restart).
+let createSqliteStore = null;
+try {
+  ({ createSqliteStore } = require('@zapo-js/store-sqlite'));
+} catch (err) {
+  console.warn('[bot] SQLite session store unavailable — sessions will be memory-only:', err.message);
+}
+
 const { extract } = require('./extractor');
 const store = require('./store');
 
@@ -72,6 +82,7 @@ let botStatus = {
   qrDataUrl: null,
   pairingCode: null,
   pairingExpiresAt: null,
+  sessionPersistent: Boolean(createSqliteStore),
   lastError: null,
 };
 
@@ -97,22 +108,38 @@ function resetLinkState() {
   botStatus.pairingExpiresAt = null;
 }
 
+/**
+ * Build the zapo-js store. Prefer SQLite (the WhatsApp link survives restarts);
+ * fall back to an in-memory store when the native module isn't available.
+ */
+function createZapoStore() {
+  if (createSqliteStore) {
+    try {
+      // The SQLite store cannot create missing parent directories itself.
+      fs.mkdirSync(path.dirname(STORE_PATH), { recursive: true });
+      const sqlite = createSqliteStore({ path: STORE_PATH });
+      botStatus.sessionPersistent = true;
+      return createStore({
+        backends: { sqlite },
+        providers: {
+          auth: 'sqlite', signal: 'sqlite', senderKey: 'sqlite', appState: 'sqlite',
+          preKey: 'sqlite', session: 'sqlite', identity: 'sqlite',
+          messages: 'none', threads: 'none', contacts: 'none', privacyToken: 'sqlite',
+        },
+      });
+    } catch (err) {
+      console.warn('[bot] SQLite session store failed — using memory store:', err.message);
+    }
+  }
+  botStatus.sessionPersistent = false;
+  return createStore({});
+}
+
 async function startBot(onOrderRecorded) {
   botStatus.connecting = true;
   botStatus.lastError = null;
 
-  // The SQLite store cannot create missing parent directories itself - and on
-  // a fresh clone/Render deploy the auth dir doesn't exist yet.
-  fs.mkdirSync(path.dirname(STORE_PATH), { recursive: true });
-
-  const zapoStore = createStore({
-    backends: { sqlite: createSqliteStore({ path: STORE_PATH }) },
-    providers: {
-      auth: 'sqlite', signal: 'sqlite', senderKey: 'sqlite', appState: 'sqlite',
-      preKey: 'sqlite', session: 'sqlite', identity: 'sqlite',
-      messages: 'none', threads: 'none', contacts: 'none', privacyToken: 'sqlite',
-    },
-  });
+  const zapoStore = createZapoStore();
 
   const logger = pino({ level: process.env.WA_DEBUG === '1' ? 'debug' : 'error' });
   client = new WaClient({ store: zapoStore, sessionId: 'default', logger });

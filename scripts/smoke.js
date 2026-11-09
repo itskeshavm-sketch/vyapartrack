@@ -1,11 +1,19 @@
 // End-to-end API smoke test: boots the Express app on an ephemeral port and
-// exercises all endpoints. Run: node scripts/smoke.js
+// exercises all endpoints. Uses a throwaway data directory so it can never
+// delete a vendor's real orders. Run: npm run test:smoke
 
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
+
+const TMP_DIR = path.join(os.tmpdir(), `vyapartrack-smoke-${process.pid}-${Date.now()}`);
+process.env.VYAPAR_DATA_DIR = TMP_DIR;
+process.env.USE_AI_PARSER = 'false';
+process.env.NO_BOT = 'true';
+
 const { createApp } = require('../src/server');
 
-const ORDERS_FILE = path.join(__dirname, '..', 'data', 'orders.json');
+const ORDERS_FILE = path.join(TMP_DIR, 'orders.json');
 
 let pass = 0;
 let fail = 0;
@@ -78,6 +86,7 @@ async function main() {
   server.closeAllConnections?.();
   server.close();
   await new Promise((r) => setTimeout(r, 150));
+  try { fs.rmSync(TMP_DIR, { recursive: true, force: true }); } catch {}
   console.log(`\n=== Smoke test: ${pass} passed, ${fail} failed ===`);
   process.exit(fail ? 1 : 0);
 }

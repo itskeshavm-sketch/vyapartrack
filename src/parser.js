@@ -103,7 +103,10 @@ const NATIVE_UNIT_MAP = (() => {
   ['मिलीलीटर मिली', 'ml'],
     ['पीस नग পিস টা பீஸ் పీస్ ముక్క ಪೀಸ್ ಐಟಂ എണ്ണം પીસ નંગ ਪੀਸ ਨਗ پیس عدد', 'pcs'],
     ['दर्जन डझन ডজন டஜன் డజನ್ ಡಜನ್ ഡസൻ ડઝન ਦર்ஜન درجن', 'dozen'],
-    ['కిలోలు కిలోల గ్రాములు గ్రాముల లీటర్లు డజన్లు', 'dozen'],
+    ['కిలోలు కిలోల', 'kg'],
+    ['గ్రాములు గ్రాముల', 'g'],
+    ['లీటర్లు', 'l'],
+    ['డజన్లు', 'dozen'],
     ['सेर शेर সের পোয়া சேர் படி సేరు ಸೇರು സേർ શેર ਸੇਰ سیر पाव பாவு పావు ಪಾವು പാവ് પાવ ਪাাਵ پاؤ', 'kg'],
   ];
   const m = {};
@@ -124,6 +127,8 @@ const NATIVE_ITEM_TAIL_RE = new RegExp(
   `\\s*(?:${['चाहिए', 'भेज दो', 'भेज देना', 'दे दो', 'दे देना', 'बना दो', 'बना देना', 'रख दो', 'पैक कर दो', 'तैयार कर दो', 'घर भेज', 'डिलीवर कर दो', 'पाहिजे', 'पाठवा', 'पाठवून द्या', 'বানিয়ে দিন', 'তৈরি করে দিন', 'রেখে দিন', 'প্যাক করে দিন', 'পাঠিয়ে দিন', 'வேண்டும்', 'அனுப்புங்க', 'குடுங்க', 'செஞ்சு குடுங்க', 'ரெடி பண்ணுங்க', 'பேக் பண்ணுங்க', 'కావాలి', 'పంపండి', 'ఇవ్వండి', 'తయారు చేయండి', 'రెడీ చేయండి', 'ప్యాక్ చేయండి', 'ಬೇಕು', 'ಕಳಿಸಿ', 'ಕೊಡಿ', 'ತಯಾರಿಸಿ ಕೊಡಿ', 'ರೆಡಿ ಮಾಡಿ', 'ಪ್ಯಾಕ್ ಮಾಡಿ', 'വേണം', 'തരൂ', 'അയക്കൂ', 'ചെയ്ത് തരൂ', 'ഉണ്ടാക്കി തരൂ', 'പാക്ക് ചെയ്ത് തരൂ', 'જોઈએ', 'મોકલી દો', 'આપી દો', 'બનાવી આપો', 'તૈયાર કરી આપો', 'રેડી કરી દો', 'પેક કરી દો', 'રાખી દો', 'ਚਾਹੀਦਾ', 'ਭੇਜ ਦਿਓ', 'ਦੇ ਦਿਓ', 'ਬਣਾ ਦਿਓ', 'ਤਿਆਰ ਕਰ ਦਿਓ', 'ਪੈਕ ਕਰ ਦਿਓ', 'ਰੱਖ ਦਿਓ', 'چاہیے', 'بھیج دو', 'دے دو', 'بنا دو', 'تیار کر دو', 'پیک کر دو', 'گھر بھیج دو'].join('|')})${A}.*$`,
   'u'
 );
+// Never mistake an order/intent word for the item name.
+const NATIVE_ITEM_STOP_RE = /^(?:ऑर्डर|आर्डर|ओरडर|कुल|कीमत|किमत|दाम|रेट|भाव|मूल्य|टोटल|मंगाया|मंगवाया|माँगा|भेजना|बनाना|ਆਰਡਰ|ਭਾਅ|ਰੇਟ|ઓર્ડર|ભાવ|રેટ|ଅର୍ଡର|ఆర్డర్|రేట్|ಆರ್ಡರ್|ರೇಟ್|ഓർഡർ|റേറ്റ്|ஆர்டர்|ரேட்|অর্ডার|দাম|آرڈر|قیمت|ریٹ)$/u;
 
 // Customer name: tried in priority order, first match wins
 const CUSTOMER_RES = [
@@ -186,9 +191,21 @@ function extractItem(text, qtyMatch) {
   if (m && m[1].trim()) {
     return m[1].trim().replace(ITEM_TAIL_STOP, '').replace(NATIVE_ITEM_TAIL_RE, '').replace(/\s+/g, ' ');
   }
+  // Native-script item after the unit: "500 ग्राम लड्डू चाहिए" / "2 किलो चीनी"
+  const nativeAfter = after.match(/^\s*(?:का\s+|की\s+|के\s+|નો\s+|ની\s+|નું\s+|এর\s+)?([\p{L}\p{M}][\p{L}\p{M} ]{1,30})/u);
+  if (nativeAfter) {
+    const item = nativeAfter[1]
+      .replace(NATIVE_ITEM_TAIL_RE, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (item.length >= 2 && !NATIVE_ITEM_STOP_RE.test(item)) return item;
+  }
   // item before the qty: "ladoo 500 grams", "chocolate cake 2kg"
   m = before.match(/([a-z][a-z]{2,24})\s*(?:ke|ka|ki|of)?\s*$/i);
   if (m && !/^(from|order|total|cost|price|profit|for|sold|sell)$/i.test(m[1])) return m[1].trim();
+  // Native-script item before the qty: "लड्डू 500 ग्राम"
+  const nativeBefore = before.match(/([\p{L}\p{M}][\p{L}\p{M}]{1,24})\s*$/u);
+  if (nativeBefore && !NATIVE_ITEM_STOP_RE.test(nativeBefore[1])) return nativeBefore[1].trim();
   return null;
 }
 

@@ -16,6 +16,12 @@ const cases = [
   'bhai 500g sugar dena',
   'I have 10 laddu at home', // bare number, no intent -> rejected
   'samosa 12 rupees', // price only, no qty -> rejected
+  // Native-script coverage (Devanagari + Telugu)
+  '500 ग्राम लड्डू चाहिए',
+  '2 किलो चीनी भेज दो, cost 80, profit 20%',
+  'लड्डू 500 ग्राम',
+  '2 కిలోలు బియ్యం కావాలి',
+  '500 గ్రాములు పప్పు కావాలి',
 ];
 
 let pass = 0;
@@ -71,6 +77,22 @@ for (const text of cases) {
   }
   if (text === 'bhai 500g sugar dena') {
     assert(r.quantity === 500 && r.unit === 'g' && r.item === 'sugar', '500g sugar');
+  }
+  if (text === '500 ग्राम लड्डू चाहिए') {
+    assert(r.quantity === 500 && r.unit === 'g' && r.item === 'लड्डू', 'Devanagari 500 g laddu');
+  }
+  if (text.startsWith('2 किलो चीनी')) {
+    assert(r.quantity === 2 && r.unit === 'kg' && r.item === 'चीनी', 'Devanagari 2 kg cheeni');
+    assert(r.costPrice === 80 && r.profitAmount === 16 && r.totalAmount === 96, 'Devanagari cost/profit math');
+  }
+  if (text === 'लड्डू 500 ग्राम') {
+    assert(r.quantity === 500 && r.unit === 'g' && r.item === 'लड्डू', 'Devanagari item before qty');
+  }
+  if (text.startsWith('2 కిలోలు')) {
+    assert(r.quantity === 2 && r.unit === 'kg' && r.item === 'బియ్యం', 'Telugu 2 kg rice');
+  }
+  if (text.startsWith('500 గ్రాములు')) {
+    assert(r.quantity === 500 && r.unit === 'g' && r.item === 'పప్పు', 'Telugu 500 g dal');
   }
 }
 

@@ -2,10 +2,10 @@ services:
   - type: web
     name: vyapartrack
     runtime: node
-    rootDir: server
+    rootDir: .
     plan: free
-    buildCommand: npm install
-    startCommand: npm start
+    buildCommand: npm install --no-audit --no-fund
+    startCommand: node server/server.js
     healthCheckPath: /api/health
     envVars:
       - key: NODE_VERSION

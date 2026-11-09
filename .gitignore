@@ -3,6 +3,9 @@ node_modules/
 auth/
 data/orders.json
 data/*.json
+server/auth/
+server/data/
+server/*.log
 *.log
 out.log
 err.log

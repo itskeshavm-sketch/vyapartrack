@@ -17,6 +17,14 @@ function createApp(botStatusFn, pairFn) {
 
   app.get('/api/stats', (req, res) => res.json(store.getStats()));
 
+  app.get('/api/health', (req, res) =>
+    res.json({
+      ok: true,
+      aiConfigured: poolside.isConfigured(),
+      aiModel: poolside.MODEL,
+      bot: botStatusFn ? botStatusFn() : null,
+    }));
+
   app.get('/api/status', (req, res) =>
     res.json({ ...(botStatusFn ? botStatusFn() : {}), aiConfigured: poolside.isConfigured(), aiModel: poolside.MODEL }));
 
