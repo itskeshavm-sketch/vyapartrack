@@ -11,8 +11,8 @@ android {
         applicationId 'com.vyapartrack.app'
         minSdk 24
         targetSdk 34
-        versionCode 290
-        versionName '2.9.1-white'
+        versionCode 291
+        versionName '2.9.2-white'
     }
 
     // Stable signing key so a new APK installs over the previous one

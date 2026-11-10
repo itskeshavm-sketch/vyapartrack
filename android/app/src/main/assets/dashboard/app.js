@@ -982,12 +982,24 @@ init();
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   var GLASS = '.stat, .card, .ob-step, .order, .code-card, .modal-card, .panel, .stat-card, .setup-panel, .table-wrap';
 
+  // pointer specular is throttled to one update per frame so a fast
+  // finger never queues more repaints than the display can show
+  var pending = null;
+  var frame = 0;
+  function paintPointer() {
+    frame = 0;
+    if (!pending) return;
+    var el = pending.el, x = pending.x, y = pending.y;
+    pending = null;
+    var r = el.getBoundingClientRect();
+    el.style.setProperty('--mx', (x - r.left) + 'px');
+    el.style.setProperty('--my', (y - r.top) + 'px');
+  }
   document.addEventListener('pointermove', function (e) {
     var el = e.target && e.target.closest ? e.target.closest(GLASS) : null;
     if (!el) return;
-    var r = el.getBoundingClientRect();
-    el.style.setProperty('--mx', (e.clientX - r.left) + 'px');
-    el.style.setProperty('--my', (e.clientY - r.top) + 'px');
+    pending = { el: el, x: e.clientX, y: e.clientY };
+    if (!frame) frame = requestAnimationFrame(paintPointer);
   }, { passive: true });
 
   var parseNum = function (txt) {
@@ -1049,18 +1061,42 @@ function popIcon(id, cls) {
 function openSheet(id) {
   var m = document.getElementById(id);
   if (!m) return;
-  m.classList.remove('hidden');
   m.classList.remove('closing');
+  m.classList.remove('hidden');
+  var card = m.querySelector('.modal-card');
+  if (card) {
+    card.style.animation = 'none';
+    void card.offsetWidth;
+    card.style.animation = '';
+  }
 }
 function closeSheet(id) {
   var m = document.getElementById(id);
   if (!m) return;
-  if (m.classList.contains('hidden')) return;
-  m.classList.add('closing');
-  setTimeout(function () {
+  if (m.classList.contains('hidden') || m.classList.contains('closing')) return;
+  var card = m.querySelector('.modal-card');
+  var done = false;
+  var finish = function () {
+    if (done) return;
+    done = true;
+    if (card && card.__vtClose) {
+      card.removeEventListener('animationend', card.__vtClose);
+      card.__vtClose = null;
+    }
     m.classList.remove('closing');
     m.classList.add('hidden');
-  }, 200);
+  };
+  m.classList.add('closing');
+  if (card) {
+    // only react to the sheet's OWN exit animation - child animations bubble up
+    card.__vtClose = function (e) {
+      if (e.target !== card) return;
+      if (e.animationName && e.animationName !== 'vtSheetOut') return;
+      finish();
+    };
+    card.addEventListener('animationend', card.__vtClose);
+  }
+  setTimeout(finish, 520);
 }
 document.addEventListener('pointerdown', function (e) {
   var btn = e.target && e.target.closest ? e.target.closest('.icon-btn, .btn-ghost, .btn-primary, .chip, .sample-chip') : null;
@@ -1076,3 +1112,16 @@ document.addEventListener('pointerdown', function (e) {
   btn.appendChild(span);
   setTimeout(function () { if (span.parentNode) span.parentNode.removeChild(span); }, 640);
 }, { passive: true });
+
+// tap outside the sheet to dismiss it (same animated close)
+['catalogModal', 'reportsModal', 'settingsModal'].forEach(function (id) {
+  var m = document.getElementById(id);
+  if (!m) return;
+  m.addEventListener('click', function (e) {
+    if (e.target === m) {
+      if (id === 'catalogModal') closeCatalog();
+      else if (id === 'reportsModal') closeReports();
+      else closeSettings();
+    }
+  });
+});

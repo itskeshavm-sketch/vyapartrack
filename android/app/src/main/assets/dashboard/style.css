@@ -479,7 +479,9 @@ body::before {
   content: "";
   position: fixed; inset: -25%;
   z-index: -2; pointer-events: none;
-  filter: blur(70px); opacity: .55;
+  opacity: .5;
+  will-change: transform;
+  transform: translate3d(0, 0, 0);
   background:
     radial-gradient(38vw 38vw at 16% 6%,  rgba(31,158,122,.18), transparent 62%),
     radial-gradient(34vw 34vw at 88% 10%, rgba(147,197,253,.20), transparent 62%),
@@ -493,9 +495,9 @@ body::after {
   background: radial-gradient(130% 70% at 50% 0%, rgba(31,158,122,.07), transparent 58%);
 }
 @keyframes lgDrift {
-  0%   { transform: translate3d(0,0,0) scale(1); }
-  50%  { transform: translate3d(3%, -2%, 0) scale(1.07); }
-  100% { transform: translate3d(-2%, 3%, 0) scale(1.02); }
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  50%  { transform: translate3d(2%, -1.5%, 0) scale(1.05); }
+  100% { transform: translate3d(-1.5%, 2%, 0) scale(1.02); }
 }
 
 body { background: #f4f7fb; }
@@ -605,12 +607,31 @@ body .pair-code { text-shadow: 0 0 22px rgba(31,158,122,.28); }
 
 
 /* ============================================================
-   MOTION PACK - ripple, icon pops, sheet transitions
+   MOTION PACK v2 - GPU-only transforms, visible exit animation
+   Everything animates on transform/opacity only, so the sheet
+   runs at the display refresh rate (60/90/120 Hz) without jank.
    ============================================================ */
+
+/* ---- perf: keep the material, drop the expensive backdrop blurs ---- */
+body .card, body .ob-step, body .order, body .modal-card,
+body .icon-btn, body .btn-ghost, body .chip, body .code-card, body .modal {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+body .card, body .ob-step { background-color: rgba(255, 255, 255, .88); }
+body .order { background-color: rgba(255, 255, 255, .72); }
+body .modal-card { background-color: rgba(255, 255, 255, .97); }
+body .code-card { background-color: rgba(31, 158, 122, .10); }
+body .icon-btn, body .btn-ghost, body .chip { background: rgba(23, 53, 107, .04); }
+body .dash-header { backdrop-filter: blur(12px) saturate(140%) !important; -webkit-backdrop-filter: blur(12px) saturate(140%) !important; }
+body .stat { backdrop-filter: blur(10px) saturate(140%) !important; -webkit-backdrop-filter: blur(10px) saturate(140%) !important; }
+
+/* ---- tappable surfaces ---- */
 .icon-btn, .btn-ghost, .btn-primary, .chip, .sample-chip {
   position: relative;
   overflow: hidden;
-  transition: transform .16s cubic-bezier(.2,.9,.2,1), box-shadow .22s ease, background .22s ease, border-color .22s ease;
+  transform: translate3d(0, 0, 0);
+  transition: transform .16s cubic-bezier(.2, .9, .2, 1), background .2s ease, border-color .2s ease, box-shadow .2s ease;
 }
 .icon-btn:active, .btn-ghost:active, .btn-primary:active, .chip:active { transform: scale(.93); }
 .icon-btn:hover { transform: translateY(-2px); }
@@ -618,61 +639,72 @@ body .pair-code { text-shadow: 0 0 22px rgba(31,158,122,.28); }
   position: absolute; border-radius: 50%;
   transform: scale(0);
   background: rgba(31, 158, 122, .30);
-  animation: vtRipple .62s cubic-bezier(.2,.6,.3,1) forwards;
+  will-change: transform, opacity;
+  animation: vtRipple .6s cubic-bezier(.2, .6, .3, 1) forwards;
   pointer-events: none;
 }
-@keyframes vtRipple { to { transform: scale(3); opacity: 0; } }
+@keyframes vtRipple { to { transform: scale(3) translateZ(0); opacity: 0; } }
 
-/* sheets */
-.modal { animation: vtFadeIn .26s ease both; }
-.modal-card { animation: vtSheetIn .44s cubic-bezier(.16, 1, .3, 1) both; }
-.modal.closing { animation: vtFadeOut .2s ease both; }
-.modal.closing .modal-card { animation: vtSheetOut .2s ease-in both; }
+/* ---- sheets: spring in, visible slide-out ---- */
+.modal { animation: vtFadeIn .24s ease both; }
+.modal-card {
+  animation: vtSheetIn .42s cubic-bezier(.16, 1, .3, 1) both;
+  will-change: transform, opacity;
+  contain: paint;
+}
+.modal.closing { animation: vtFadeOut .26s ease both; }
+.modal.closing .modal-card { animation: vtSheetOut .26s cubic-bezier(.4, 0, 1, 1) both; }
 @keyframes vtFadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes vtFadeOut { from { opacity: 1; } to { opacity: 0; } }
 @keyframes vtSheetIn {
-  from { opacity: 0; transform: translateY(46px) scale(.95); }
-  to   { opacity: 1; transform: none; }
+  from { opacity: 0; transform: translate3d(0, 54px, 0) scale(.94); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
 }
 @keyframes vtSheetOut {
-  from { opacity: 1; transform: none; }
-  to   { opacity: 0; transform: translateY(34px) scale(.97); }
+  from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+  to   { opacity: 0; transform: translate3d(0, 26px, 0) scale(.94); }
 }
 .modal-card .card-head,
 .modal-card > h3,
 .modal-card .chips,
 .modal-card form,
-.modal-card .kpi-grid { animation: vtRise .5s cubic-bezier(.2,.9,.2,1) both; }
+.modal-card .kpi-grid,
+.modal-card .kpi { animation: vtRise .5s cubic-bezier(.2, .9, .2, 1) both; }
 .modal-card > h3:nth-of-type(2) { animation-delay: .06s; }
 .modal-card > h3:nth-of-type(3) { animation-delay: .12s; }
 @keyframes vtRise {
-  from { opacity: 0; transform: translateY(14px); }
-  to   { opacity: 1; transform: none; }
+  from { opacity: 0; transform: translate3d(0, 14px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
 }
 
-/* icon glyph pops */
-@keyframes vtGear  { 0% { transform: rotate(0) scale(1); } 45% { transform: rotate(150deg) scale(1.2); } 100% { transform: rotate(180deg) scale(1); } }
-@keyframes vtCart  { 0% { transform: translateY(0) scale(1); } 32% { transform: translateY(-8px) scale(1.18); } 68% { transform: translateY(0) scale(.94); } 100% { transform: none; } }
-@keyframes vtChart { 0% { transform: scale(.7); } 55% { transform: scale(1.24); } 100% { transform: scale(1); } }
-@keyframes vtSpark { 0% { transform: scale(1) rotate(0); } 40% { transform: scale(1.25) rotate(14deg); } 100% { transform: scale(1) rotate(0); } }
-.icon-btn.pop-gear  { animation: vtGear .58s cubic-bezier(.2,.9,.2,1); }
-.icon-btn.pop-cart  { animation: vtCart .58s cubic-bezier(.2,.9,.2,1); }
-.icon-btn.pop-chart { animation: vtChart .58s cubic-bezier(.2,.9,.2,1); }
-.icon-btn.pop-spark { animation: vtSpark .58s cubic-bezier(.2,.9,.2,1); }
+/* ---- icon glyph pops ---- */
+@keyframes vtGear  { 0% { transform: translate3d(0,0,0) rotate(0) scale(1); } 45% { transform: translate3d(0,0,0) rotate(150deg) scale(1.22); } 100% { transform: translate3d(0,0,0) rotate(180deg) scale(1); } }
+@keyframes vtCart  { 0% { transform: translate3d(0,0,0) scale(1); } 32% { transform: translate3d(0,-9px,0) scale(1.2); } 68% { transform: translate3d(0,0,0) scale(.94); } 100% { transform: translate3d(0,0,0) scale(1); } }
+@keyframes vtChart { 0% { transform: translate3d(0,0,0) scale(.7); } 55% { transform: translate3d(0,0,0) scale(1.26); } 100% { transform: translate3d(0,0,0) scale(1); } }
+@keyframes vtSpark { 0% { transform: translate3d(0,0,0) scale(1) rotate(0); } 40% { transform: translate3d(0,0,0) scale(1.28) rotate(14deg); } 100% { transform: translate3d(0,0,0) scale(1) rotate(0); } }
+.icon-btn.pop-gear, .icon-btn.pop-cart, .icon-btn.pop-chart, .icon-btn.pop-spark {
+  animation-duration: .55s;
+  animation-timing-function: cubic-bezier(.2, .9, .2, 1);
+  animation-fill-mode: both;
+  will-change: transform;
+}
+.icon-btn.pop-gear  { animation-name: vtGear; }
+.icon-btn.pop-cart  { animation-name: vtCart; }
+.icon-btn.pop-chart { animation-name: vtChart; }
+.icon-btn.pop-spark { animation-name: vtSpark; }
 
-/* theme cross-fade */
+/* ---- theme cross-fade ---- */
 body.theme-fade { animation: vtThemeFade .38s ease both; }
-@keyframes vtThemeFade { from { opacity: .5; } to { opacity: 1; } }
+@keyframes vtThemeFade { from { opacity: .45; } to { opacity: 1; } }
 
-/* sheet content: chips and rows pop in */
-.chip { transition: transform .18s cubic-bezier(.2,.9,.2,1), background .2s ease; }
-.chip:hover { transform: translateY(-1px); }
-.modal-card .kpi { animation: vtRise .5s cubic-bezier(.2,.9,.2,1) both; }
-
+/* ---- accessible fallback: fade only, no movement ---- */
 @media (prefers-reduced-motion: reduce) {
-  .modal, .modal-card, .modal.closing, .modal.closing .modal-card,
+  body::before { animation: none; }
+  .modal, .modal.closing { animation: vtFadeIn .18s ease both !important; }
+  .modal-card, .modal.closing .modal-card { animation: vtFadeIn .18s ease both !important; }
   .modal-card .card-head, .modal-card > h3, .modal-card .chips, .modal-card form,
-  .modal-card .kpi-grid, .modal-card .kpi, body.theme-fade,
+  .modal-card .kpi-grid, .modal-card .kpi { animation: none !important; }
+  body.theme-fade { animation: vtThemeFade .2s ease both !important; }
   .icon-btn.pop-gear, .icon-btn.pop-cart, .icon-btn.pop-chart, .icon-btn.pop-spark { animation: none !important; }
   .ripple { display: none; }
 }
