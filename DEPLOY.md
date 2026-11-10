@@ -64,7 +64,7 @@ gradle :app:assembleDebug
 
 APK output: `android/app/build/outputs/apk/debug/app-debug.apk`. Copy it to the phone and install. You need JDK 17+, `ANDROID_HOME`, and the NDK configured in `android/app/build.gradle`.
 
-> You do not need a local SDK: push to `main` and the **Build Android APK** GitHub Actions workflow builds the APK and attaches it to the run. The current installable build is published as a release: [VyaparTrack-2.8.7-lime-debug.apk](https://github.com/itskeshavm-sketch/vyapartrack/releases/download/v2.8.7/VyaparTrack-2.8.7-lime-debug.apk).
+> You do not need a local SDK: push to `main` and the **Build Android APK** GitHub Actions workflow builds the APK and attaches it to the run. The current installable build is published as a release: [VyaparTrack-2.8.7-lime-debug.apk](https://github.com/itskeshavm-sketch/vyapartrack/releases/download/v2.8.8/VyaparTrack-2.8.8-lime-debug.apk).
 
 ## 5. Keep the free server awake
 
