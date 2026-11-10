@@ -523,9 +523,9 @@ function reportWindow() {
 }
 
 const PIE_BY_THEME = {
-  midnight: ['#2fbf71', '#f5c66b', '#c9b8ff', '#6ec5ff', '#ff9d8a', '#7fe0ae', '#e08ac9'],
+  midnight: ['#c9f24d', '#f5c66b', '#c9b8ff', '#6ec5ff', '#ff9d8a', '#e4f7b0', '#e08ac9'],
   bazaar: ['#c0392b', '#e8930c', '#1d7a4c', '#8a6d3b', '#d35400', '#7d3c98', '#2e86c1'],
-  munim: ['#1d7a4c', '#4cc07a', '#e8930c', '#2e86c1', '#7d3c98', '#5f7268', '#c0392b'],
+  munim: ['#1d7a4c', '#d7ff63', '#e8930c', '#2e86c1', '#7d3c98', '#8e9a7e', '#c0392b'],
 };
 const THEME_KEY = 'vyapartrack.theme.v1';
 function getTheme() { return localStorage.getItem(THEME_KEY) || 'midnight'; }
