@@ -416,15 +416,15 @@ body[data-theme="bazaar"] .result.ok { background: #f2f7de; border-color: #1f9e7
 body[data-theme="bazaar"] .result.err { background: #fdecea; border-color: #c0392b; color: #8e2318; }
 
 /* ---------- 📒 Munim (clean light ledger) ---------- */
-body[data-theme="munim"] { background: #eef2ee; color: #ffffff; }
+body[data-theme="munim"] { background: #eef2ee; color: #12213f; }
 body[data-theme="munim"] .muted, body[data-theme="munim"] .en-sub { color: #5b6b85; }
 body[data-theme="munim"] .btn-primary { background: #0f6b4f; color: #fff; box-shadow: 0 3px 0 #0f6b4f; }
-body[data-theme="munim"] .btn-ghost, body[data-theme="munim"] .icon-btn { background: #fff; color: #ffffff; border: 1px solid #12213f; }
+body[data-theme="munim"] .btn-ghost, body[data-theme="munim"] .icon-btn { background: #fff; color: #12213f; border: 1px solid #12213f; }
 body[data-theme="munim"] .onboarding, body[data-theme="munim"] .dashboard { background: #eef2ee; }
 body[data-theme="munim"] .ob-step { background: #fff; border: none; box-shadow: 0 2px 8px rgba(29,36,18,.1); }
 body[data-theme="munim"] .ob-logo { background: #0f6b4f; color: #fff; box-shadow: none; }
 body[data-theme="munim"] .cc { background: #f2f5f2; border-color: #12213f; color: #5b6b85; }
-body[data-theme="munim"] #obPhone { background: #fbfdfb; border-color: #12213f; color: #ffffff; }
+body[data-theme="munim"] #obPhone { background: #fbfdfb; border-color: #12213f; color: #12213f; }
 body[data-theme="munim"] .code-card { background: #f2f7de; border-color: #1f9e7a; }
 body[data-theme="munim"] .pair-code { color: #0f6b4f; }
 body[data-theme="munim"] .brand-icon { background: #0f6b4f; color: #fff; box-shadow: none; }
@@ -434,9 +434,9 @@ body[data-theme="munim"] .stat.green .val { color: #0f6b4f; }
 body[data-theme="munim"] .stat.gold .val { color: #c2740a; }
 body[data-theme="munim"] .stat.violet .val { color: #5f6fd1; }
 body[data-theme="munim"] .card { background: #fff; border: none; box-shadow: 0 2px 8px rgba(29,36,18,.08); }
-body[data-theme="munim"] .add-card input { background: #fbfdfb; border: 1px solid #12213f; color: #ffffff; }
+body[data-theme="munim"] .add-card input { background: #fbfdfb; border: 1px solid #12213f; color: #12213f; }
 body[data-theme="munim"] .order { background: #fbfdfb; border: 1px solid #e4eae4; }
-body[data-theme="munim"] .order-item { color: #ffffff; }
+body[data-theme="munim"] .order-item { color: #12213f; }
 body[data-theme="munim"] .order-src { color: #6b7a94; }
 body[data-theme="munim"] .order-amt { color: #0f6b4f; }
 body[data-theme="munim"] .order-actions .icon-btn { background: transparent; border: none; color: #5b6b85; }
@@ -446,21 +446,21 @@ body[data-theme="munim"] .modal { background: rgba(29,36,18,.4); }
 body[data-theme="munim"] .modal-card { background: #f4f6f4; border: none; }
 body[data-theme="munim"] .modal-card .card-head { background: #f4f6f4; }
 body[data-theme="munim"] .modal-card label { color: #5b6b85; }
-body[data-theme="munim"] .modal-card input, body[data-theme="munim"] .modal-card select { background: #fff; border: 1px solid #12213f; color: #ffffff; }
+body[data-theme="munim"] .modal-card input, body[data-theme="munim"] .modal-card select { background: #fff; border: 1px solid #12213f; color: #12213f; }
 body[data-theme="munim"] .catalog-row { background: #fbfdfb; border: 1px solid #e4eae4; }
 body[data-theme="munim"] .catalog-row .c-prices { color: #5b6b85; }
-body[data-theme="munim"] .catalog-form select, body[data-theme="munim"] .catalog-form input { background: #fff; border: 1px solid #12213f; color: #ffffff; }
+body[data-theme="munim"] .catalog-form select, body[data-theme="munim"] .catalog-form input { background: #fff; border: 1px solid #12213f; color: #12213f; }
 body[data-theme="munim"] .pending-card { background: #fff8e8; border-color: #ea8a04; }
-body[data-theme="munim"] .pending-item input { background: #fff; border-color: #12213f; color: #ffffff; }
-body[data-theme="munim"] .chip { background: #fff; border: 1px solid #12213f; color: #ffffff; }
+body[data-theme="munim"] .pending-item input { background: #fff; border-color: #12213f; color: #12213f; }
+body[data-theme="munim"] .chip { background: #fff; border: 1px solid #12213f; color: #12213f; }
 body[data-theme="munim"] .chip.active { background: #0f6b4f; border-color: #0f6b4f; color: #fff; }
-body[data-theme="munim"] .custom-range input { background: #fff; border: 1px solid #12213f; color: #ffffff; color-scheme: light; }
+body[data-theme="munim"] .custom-range input { background: #fff; border: 1px solid #12213f; color: #12213f; color-scheme: light; }
 body[data-theme="munim"] .kpi { background: #fff; border: none; box-shadow: 0 2px 8px rgba(29,36,18,.08); }
 body[data-theme="munim"] .kpi .k-lbl { color: #5b6b85; }
 body[data-theme="munim"] .kpi.green .k-val { color: #0f6b4f; }
 body[data-theme="munim"] .kpi.gold .k-val { color: #c2740a; }
 body[data-theme="munim"] .kpi.violet .k-val { color: #5f6fd1; }
-body[data-theme="munim"] .donut-num { fill: #ffffff; }
+body[data-theme="munim"] .donut-num { fill: #12213f; }
 body[data-theme="munim"] .donut-lbl { fill: #5b6b85; }
 body[data-theme="munim"] .leg-val { color: #5b6b85; }
 body[data-theme="munim"] .bar-track { background: #e8eee8; }
@@ -602,3 +602,77 @@ body .pair-code { text-shadow: 0 0 22px rgba(31,158,122,.28); }
   font-weight: 400;
 }
 .wordmark b { font-weight: 800; }
+
+
+/* ============================================================
+   MOTION PACK - ripple, icon pops, sheet transitions
+   ============================================================ */
+.icon-btn, .btn-ghost, .btn-primary, .chip, .sample-chip {
+  position: relative;
+  overflow: hidden;
+  transition: transform .16s cubic-bezier(.2,.9,.2,1), box-shadow .22s ease, background .22s ease, border-color .22s ease;
+}
+.icon-btn:active, .btn-ghost:active, .btn-primary:active, .chip:active { transform: scale(.93); }
+.icon-btn:hover { transform: translateY(-2px); }
+.ripple {
+  position: absolute; border-radius: 50%;
+  transform: scale(0);
+  background: rgba(31, 158, 122, .30);
+  animation: vtRipple .62s cubic-bezier(.2,.6,.3,1) forwards;
+  pointer-events: none;
+}
+@keyframes vtRipple { to { transform: scale(3); opacity: 0; } }
+
+/* sheets */
+.modal { animation: vtFadeIn .26s ease both; }
+.modal-card { animation: vtSheetIn .44s cubic-bezier(.16, 1, .3, 1) both; }
+.modal.closing { animation: vtFadeOut .2s ease both; }
+.modal.closing .modal-card { animation: vtSheetOut .2s ease-in both; }
+@keyframes vtFadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes vtFadeOut { from { opacity: 1; } to { opacity: 0; } }
+@keyframes vtSheetIn {
+  from { opacity: 0; transform: translateY(46px) scale(.95); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes vtSheetOut {
+  from { opacity: 1; transform: none; }
+  to   { opacity: 0; transform: translateY(34px) scale(.97); }
+}
+.modal-card .card-head,
+.modal-card > h3,
+.modal-card .chips,
+.modal-card form,
+.modal-card .kpi-grid { animation: vtRise .5s cubic-bezier(.2,.9,.2,1) both; }
+.modal-card > h3:nth-of-type(2) { animation-delay: .06s; }
+.modal-card > h3:nth-of-type(3) { animation-delay: .12s; }
+@keyframes vtRise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* icon glyph pops */
+@keyframes vtGear  { 0% { transform: rotate(0) scale(1); } 45% { transform: rotate(150deg) scale(1.2); } 100% { transform: rotate(180deg) scale(1); } }
+@keyframes vtCart  { 0% { transform: translateY(0) scale(1); } 32% { transform: translateY(-8px) scale(1.18); } 68% { transform: translateY(0) scale(.94); } 100% { transform: none; } }
+@keyframes vtChart { 0% { transform: scale(.7); } 55% { transform: scale(1.24); } 100% { transform: scale(1); } }
+@keyframes vtSpark { 0% { transform: scale(1) rotate(0); } 40% { transform: scale(1.25) rotate(14deg); } 100% { transform: scale(1) rotate(0); } }
+.icon-btn.pop-gear  { animation: vtGear .58s cubic-bezier(.2,.9,.2,1); }
+.icon-btn.pop-cart  { animation: vtCart .58s cubic-bezier(.2,.9,.2,1); }
+.icon-btn.pop-chart { animation: vtChart .58s cubic-bezier(.2,.9,.2,1); }
+.icon-btn.pop-spark { animation: vtSpark .58s cubic-bezier(.2,.9,.2,1); }
+
+/* theme cross-fade */
+body.theme-fade { animation: vtThemeFade .38s ease both; }
+@keyframes vtThemeFade { from { opacity: .5; } to { opacity: 1; } }
+
+/* sheet content: chips and rows pop in */
+.chip { transition: transform .18s cubic-bezier(.2,.9,.2,1), background .2s ease; }
+.chip:hover { transform: translateY(-1px); }
+.modal-card .kpi { animation: vtRise .5s cubic-bezier(.2,.9,.2,1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .modal, .modal-card, .modal.closing, .modal.closing .modal-card,
+  .modal-card .card-head, .modal-card > h3, .modal-card .chips, .modal-card form,
+  .modal-card .kpi-grid, .modal-card .kpi, body.theme-fade,
+  .icon-btn.pop-gear, .icon-btn.pop-cart, .icon-btn.pop-chart, .icon-btn.pop-spark { animation: none !important; }
+  .ripple { display: none; }
+}

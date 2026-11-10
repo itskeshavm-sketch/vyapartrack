@@ -358,8 +358,8 @@ $('ordersList').addEventListener('click', async (e) => {
 });
 
 // ============ Catalog (मेरे आइटम) ============
-function openCatalog() { renderCatalog(); $('catalogModal').classList.remove('hidden'); }
-function closeCatalog() { $('catalogModal').classList.add('hidden'); }
+function openCatalog() { renderCatalog(); openSheet('catalogModal'); popIcon('catalogBtn', 'pop-cart'); }
+function closeCatalog() { closeSheet('catalogModal'); }
 $('catalogBtn').addEventListener('click', openCatalog);
 $('catalogCloseBtn').addEventListener('click', closeCatalog);
 
@@ -488,10 +488,11 @@ $('pendingList').addEventListener('click', async (e) => {
 // ============ Reports (📊 बिक्री रिपोर्ट — offline SVG, no libraries) ============
 let reportRange = '7';
 function openReports() {
-  $('reportsModal').classList.remove('hidden');
+  openSheet('reportsModal');
+  popIcon('reportsBtn', 'pop-chart');
   renderReports();
 }
-function closeReports() { $('reportsModal').classList.add('hidden'); }
+function closeReports() { closeSheet('reportsModal'); }
 $('reportsBtn').addEventListener('click', openReports);
 $('reportsCloseBtn').addEventListener('click', closeReports);
 $('reportChips').addEventListener('click', (e) => {
@@ -539,6 +540,10 @@ $('themeChips').addEventListener('click', (e) => {
   const chip = e.target.closest('.chip');
   if (!chip) return;
   applyTheme(chip.dataset.theme);
+  document.body.classList.remove('theme-fade');
+  void document.body.offsetWidth;
+  document.body.classList.add('theme-fade');
+  setTimeout(function () { document.body.classList.remove('theme-fade'); }, 420);
   if (!$('reportsModal').classList.contains('hidden')) renderReports();
 });
 
@@ -641,9 +646,10 @@ function renderReports() {
 // ============ Settings (theme only) ============
 function openSettings() {
   applyTheme(getTheme());
-  $('settingsModal').classList.remove('hidden');
+  openSheet('settingsModal');
+  popIcon('settingsBtn', 'pop-gear');
 }
-function closeSettings() { $('settingsModal').classList.add('hidden'); }
+function closeSettings() { closeSheet('settingsModal'); }
 $('settingsBtn').addEventListener('click', openSettings);
 $('settingsCloseBtn').addEventListener('click', closeSettings);
 
@@ -1031,3 +1037,42 @@ init();
     }).observe(el, { childList: true, characterData: true, subtree: true });
   });
 })();
+
+/* ============ motion helpers: ripple, icon pops, animated sheets ============ */
+function popIcon(id, cls) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.classList.remove(cls);
+  void el.offsetWidth;
+  el.classList.add(cls);
+}
+function openSheet(id) {
+  var m = document.getElementById(id);
+  if (!m) return;
+  m.classList.remove('hidden');
+  m.classList.remove('closing');
+}
+function closeSheet(id) {
+  var m = document.getElementById(id);
+  if (!m) return;
+  if (m.classList.contains('hidden')) return;
+  m.classList.add('closing');
+  setTimeout(function () {
+    m.classList.remove('closing');
+    m.classList.add('hidden');
+  }, 200);
+}
+document.addEventListener('pointerdown', function (e) {
+  var btn = e.target && e.target.closest ? e.target.closest('.icon-btn, .btn-ghost, .btn-primary, .chip, .sample-chip') : null;
+  if (!btn) return;
+  var r = btn.getBoundingClientRect();
+  var size = Math.max(r.width, r.height) * 1.2;
+  var span = document.createElement('span');
+  span.className = 'ripple';
+  span.style.width = size + 'px';
+  span.style.height = size + 'px';
+  span.style.left = (e.clientX - r.left - size / 2) + 'px';
+  span.style.top = (e.clientY - r.top - size / 2) + 'px';
+  btn.appendChild(span);
+  setTimeout(function () { if (span.parentNode) span.parentNode.removeChild(span); }, 640);
+}, { passive: true });
