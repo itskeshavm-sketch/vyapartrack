@@ -2,7 +2,7 @@
 
 **Turn messy WhatsApp order messages into a live profit ledger — right on your phone.**
 
-[![Download the Android APK](https://img.shields.io/badge/Download-Android%20APK-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/itskeshavm-sketch/vyapartrack/raw/main/VyaparTrack-v2.3-onetap-debug.apk)
+[![Download the Android APK](https://img.shields.io/badge/Download-Android%20APK-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/itskeshavm-sketch/vyapartrack/releases/download/v2.8.6/VyaparTrack-2.8.6-debug.apk)
 
 ```
 "Order from Mayank, 500 grams ladoo, +15% profit, total cost of ladoo=200 rupees"
@@ -14,15 +14,16 @@ Mayank · 500 g Ladoo · Cost ₹200 · Profit ₹30 (15%) · Total ₹230
 
 **No terminal. No server. No API key. No setup.**
 
-1. **[Download the APK](https://github.com/itskeshavm-sketch/vyapartrack/raw/main/VyaparTrack-v2.3-onetap-debug.apk)** — `VyaparTrack-v2.3-onetap-debug.apk`
+1. **[Download the APK](https://github.com/itskeshavm-sketch/vyapartrack/releases/download/v2.8.6/VyaparTrack-2.8.6-debug.apk)** — `VyaparTrack-2.8.6-debug.apk` (Android 7.0+, ~74 MB)
 2. Open the downloaded file on your Android phone.
 3. Allow **"Install unknown apps"** if Android asks, then tap **Install**.
-4. Open **VyaparTrack**. If the server dialog appears, tap **Close** — the app runs fully offline.
-5. Tap **Load demo data** to see the dashboard populated instantly.
+4. If an older VyaparTrack is already installed, uninstall it first (long-press the app → Uninstall) — the new build is signed with a fresh key.
+5. Open **VyaparTrack**. If the server dialog appears, tap **Close** — the app runs fully offline.
+6. Tap **Load demo data** to see the dashboard populated instantly.
 
 The dashboard, parser, and order storage run **on the phone**, so the demo works offline and business data never leaves the device. Type or paste an order into **Add / Test order**, then tap the share icon to send a confirmation to WhatsApp.
 
-To auto-track incoming WhatsApp messages, connect the app to the hosted server: deploy it with `DEPLOY.md`, then paste the server URL and API token into **Settings**. Live WhatsApp tracking is a server feature; the offline APK handles manual orders, pricing, profit, and sharing by itself.
+To auto-track incoming WhatsApp messages, pair the shop's WhatsApp number from the app's start screen — the engine runs on the phone, so every incoming order lands in the ledger automatically. A hosted server is optional; see `DEPLOY.md` if you would rather point the app at one.
 
 > **Demo tip:** load the sample orders before judging. They carry a **DEMO** badge so sample revenue is never confused with real business.
 
@@ -132,15 +133,15 @@ The server prints its API token on first boot; protected endpoints use the `X-AP
 
 ## Build the Android app yourself
 
-The prebuilt **`VyaparTrack-v2.3-onetap-debug.apk`** is the offline WebView client: local parser, demo data, profit dashboard, and WhatsApp sharing. It does not auto-read incoming WhatsApp messages without the hosted server.
+The prebuilt **`VyaparTrack-2.8.6-debug.apk`** is the full app: on-phone WhatsApp engine, pairing-code login, the offline Hinglish parser, the profit dashboard, and WhatsApp sharing. Orders and session data stay in app-private storage on the device.
 
-The newer `android/` source (engine v2.7) contains the on-phone engine work:
+The `android/` source (engine v2.8.6) is what that APK is built from:
 
-- It embeds the on-phone Node engine and serves the dashboard in a WebView at `http://127.0.0.1:3000`, so it can work offline and keep data on the device.
+- It runs the WhatsApp engine on the phone and serves the dashboard in a WebView at `http://127.0.0.1:3000`, so it can work offline and keep data on the device.
 - Orders and WhatsApp session data live in app-private storage.
 - Login uses the pairing-code flow because a phone cannot scan its own QR.
 
-Rebuild after engine changes:
+Rebuild after engine changes — either in CI (no local setup needed, the workflow builds and uploads the APK) or locally:
 
 ```bash
 node scripts/pack-node.js
@@ -148,7 +149,7 @@ cd android
 gradle :app:assembleDebug
 ```
 
-APK output: `android/app/build/outputs/apk/debug/app-debug.apk`. This needs JDK 17+, `ANDROID_HOME`, and the NDK configured in `android/app/build.gradle`. The committed APK is an older debug build; rebuild for the latest parser and dashboard.
+CI output: `android/app/build/outputs/apk/debug/app-debug.apk` inside the **Build Android APK** workflow run. A local build needs JDK 17+, `ANDROID_HOME`, and the NDK configured in `android/app/build.gradle`.
 
 ## Project layout
 
