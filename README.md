@@ -2,7 +2,7 @@
 
 **Turn messy WhatsApp order messages into a live profit ledger — right on your phone.**
 
-[![Download the Android APK](https://img.shields.io/badge/Download-Android%20APK-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/itskeshavm-sketch/vyapartrack/releases/download/v2.8.6/VyaparTrack-2.8.6-debug.apk)
+[![Download the Android APK](https://img.shields.io/badge/Download-Android%20APK-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/itskeshavm-sketch/vyapartrack/releases/download/v2.8.7/VyaparTrack-2.8.7-lime-debug.apk)
 
 ```
 "Order from Mayank, 500 grams ladoo, +15% profit, total cost of ladoo=200 rupees"
@@ -14,10 +14,10 @@ Mayank · 500 g Ladoo · Cost ₹200 · Profit ₹30 (15%) · Total ₹230
 
 **No terminal. No server. No API key. No setup.**
 
-1. **[Download the APK](https://github.com/itskeshavm-sketch/vyapartrack/releases/download/v2.8.6/VyaparTrack-2.8.6-debug.apk)** — `VyaparTrack-2.8.6-debug.apk` (Android 7.0+, ~74 MB)
+1. **[Download the APK](https://github.com/itskeshavm-sketch/vyapartrack/releases/download/v2.8.7/VyaparTrack-2.8.7-lime-debug.apk)** — `VyaparTrack-2.8.7-lime-debug.apk` (Android 7.0+, ~74 MB)
 2. Open the downloaded file on your Android phone.
 3. Allow **"Install unknown apps"** if Android asks, then tap **Install**.
-4. If an older VyaparTrack is already installed, uninstall it first (long-press the app → Uninstall) — the new build is signed with a fresh key.
+4. If an older VyaparTrack is already installed, uninstall it first (long-press the app → Uninstall) — the lime release is signed with the project key, so only the previous pre-lime build needs removing.
 5. Open **VyaparTrack**. If the server dialog appears, tap **Close** — the app runs fully offline.
 6. Tap **Load demo data** to see the dashboard populated instantly.
 
@@ -133,7 +133,7 @@ The server prints its API token on first boot; protected endpoints use the `X-AP
 
 ## Build the Android app yourself
 
-The prebuilt **`VyaparTrack-2.8.6-debug.apk`** is the full app: on-phone WhatsApp engine, pairing-code login, the offline Hinglish parser, the profit dashboard, and WhatsApp sharing. Orders and session data stay in app-private storage on the device.
+The prebuilt **`VyaparTrack-2.8.7-lime-debug.apk`** is the full app: on-phone WhatsApp engine, pairing-code login, the offline Hinglish parser, the profit dashboard, and WhatsApp sharing. Orders and session data stay in app-private storage on the device. The app ships in the lime identity: a lime rupee-in-a-chat-bubble adaptive launcher icon (with an Android 13+ monochrome themed icon), a matching splash screen, and a lime-on-ink dashboard.
 
 The `android/` source (engine v2.8.6) is what that APK is built from:
 
