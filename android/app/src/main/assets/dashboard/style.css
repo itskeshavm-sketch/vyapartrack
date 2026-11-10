@@ -473,3 +473,123 @@ body[data-theme="munim"] .best-val { color: #4e6b0c; }
 body[data-theme="munim"] .result.ok { background: #f2f7de; border-color: #8fb81f; color: #4e6b0c; }
 body[data-theme="munim"] .result.err { background: #fdecea; border-color: #c0392b; color: #8e2318; }
 body[data-theme="munim"] .divider { background: #e4eae4; }
+
+/* ---------- liquid glass: animated aurora backdrop ---------- */
+body::before {
+  content: "";
+  position: fixed; inset: -25%;
+  z-index: -2; pointer-events: none;
+  filter: blur(70px); opacity: .55;
+  background:
+    radial-gradient(38vw 38vw at 16% 6%,  rgba(201,242,77,.32), transparent 62%),
+    radial-gradient(34vw 34vw at 88% 10%, rgba(64,214,255,.20), transparent 62%),
+    radial-gradient(42vw 42vw at 62% 94%, rgba(168,120,255,.18), transparent 62%),
+    radial-gradient(30vw 30vw at 6% 80%,  rgba(255,198,107,.14), transparent 62%);
+  animation: lgDrift 30s ease-in-out infinite alternate;
+}
+body::after {
+  content: "";
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(130% 70% at 50% 0%, rgba(201,242,77,.07), transparent 58%);
+}
+@keyframes lgDrift {
+  0%   { transform: translate3d(0,0,0) scale(1); }
+  50%  { transform: translate3d(3%, -2%, 0) scale(1.07); }
+  100% { transform: translate3d(-2%, 3%, 0) scale(1.02); }
+}
+
+body { background: #0b0e06; }
+body .onboarding {
+  background:
+    radial-gradient(1200px 520px at 50% -10%, rgba(201,242,77,.14), transparent 62%),
+    linear-gradient(180deg, rgba(22,27,10,.55) 0%, rgba(11,14,6,.82) 62%);
+}
+body .dashboard { background: transparent; }
+
+/* ---------- liquid glass: surfaces ---------- */
+body .dash-header {
+  background: rgba(16,20,8,.55);
+  backdrop-filter: blur(20px) saturate(170%);
+  -webkit-backdrop-filter: blur(20px) saturate(170%);
+  border-bottom: 1px solid rgba(255,255,255,.10);
+  box-shadow: 0 14px 34px rgba(0,0,0,.34);
+}
+body .stat,
+body .card,
+body .ob-step {
+  background-color: rgba(255,255,255,.055);
+  background-image: radial-gradient(260px circle at var(--mx,50%) var(--my,50%), rgba(255,255,255,.13), transparent 62%);
+  backdrop-filter: blur(20px) saturate(175%);
+  -webkit-backdrop-filter: blur(20px) saturate(175%);
+  border: 1px solid rgba(255,255,255,.10);
+  box-shadow: 0 18px 42px rgba(0,0,0,.34), 0 1px 0 rgba(255,255,255,.13) inset;
+}
+body .order {
+  background-color: rgba(255,255,255,.045);
+  background-image: radial-gradient(220px circle at var(--mx,50%) var(--my,50%), rgba(255,255,255,.10), transparent 62%);
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  border: 1px solid rgba(255,255,255,.08);
+  box-shadow: 0 10px 22px rgba(0,0,0,.26);
+}
+body .code-card {
+  background-color: rgba(201,242,77,.10);
+  backdrop-filter: blur(18px) saturate(180%);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  border: 1px solid rgba(201,242,77,.38);
+  box-shadow: 0 14px 30px rgba(0,0,0,.30), 0 0 34px rgba(201,242,77,.10);
+}
+body .modal-card {
+  background-color: rgba(17,21,8,.74);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid rgba(255,255,255,.12);
+  box-shadow: 0 34px 80px rgba(0,0,0,.62);
+}
+body .modal-card .card-head {
+  background: rgba(17,21,8,.5);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+body .icon-btn,
+body .btn-ghost {
+  background: rgba(255,255,255,.07);
+  backdrop-filter: blur(14px) saturate(170%);
+  -webkit-backdrop-filter: blur(14px) saturate(170%);
+  border: 1px solid rgba(255,255,255,.12);
+}
+body .chip {
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.12);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* ---------- motion ---------- */
+@keyframes lgRise { from { opacity: 0; transform: translateY(16px) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes lgRow  { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes lgBump { 0% { transform: scale(1); } 40% { transform: scale(1.13); } 100% { transform: scale(1); } }
+
+body .stat { animation: lgRise .7s cubic-bezier(.2,.9,.2,1) both; }
+body .stats .stat:nth-child(1) { animation-delay: .04s; }
+body .stats .stat:nth-child(2) { animation-delay: .12s; }
+body .stats .stat:nth-child(3) { animation-delay: .20s; }
+body .stats .stat:nth-child(4) { animation-delay: .28s; }
+body .card { animation: lgRise .8s cubic-bezier(.2,.9,.2,1) both; }
+body .ob-step { animation: lgRise .8s cubic-bezier(.2,.9,.2,1) both; }
+body .order { animation: lgRow .5s cubic-bezier(.2,.9,.2,1) both; }
+body .order:nth-child(2) { animation-delay: .05s; }
+body .order:nth-child(3) { animation-delay: .10s; }
+body .order:nth-child(4) { animation-delay: .15s; }
+body .order:nth-child(5) { animation-delay: .20s; }
+body .order:nth-child(6) { animation-delay: .25s; }
+body .order:nth-child(7) { animation-delay: .30s; }
+body .order:nth-child(8) { animation-delay: .35s; }
+body .val.bump { animation: lgBump .45s cubic-bezier(.2,1.3,.4,1); }
+body .brand-icon { animation: lgBump 6s ease-in-out infinite; }
+body .pair-code { text-shadow: 0 0 22px rgba(201,242,77,.35); }
+
+@media (prefers-reduced-motion: reduce) {
+  body::before { animation: none; }
+  body .stat, body .card, body .ob-step, body .order, body .brand-icon { animation: none !important; }
+}

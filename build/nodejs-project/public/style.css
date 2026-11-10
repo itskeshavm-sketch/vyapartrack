@@ -446,3 +446,61 @@ footer {
   .order-form { flex-direction: column; }
   .order-form button { padding: 13px; }
 }
+
+/* ---------- liquid glass: animated aurora backdrop ---------- */
+body::before {
+  content: "";
+  position: fixed; inset: -25%;
+  z-index: -2; pointer-events: none;
+  filter: blur(70px); opacity: .55;
+  background:
+    radial-gradient(38vw 38vw at 16% 6%,  rgba(201,242,77,.32), transparent 62%),
+    radial-gradient(34vw 34vw at 88% 10%, rgba(64,214,255,.20), transparent 62%),
+    radial-gradient(42vw 42vw at 62% 94%, rgba(168,120,255,.18), transparent 62%),
+    radial-gradient(30vw 30vw at 6% 80%,  rgba(255,198,107,.14), transparent 62%);
+  animation: lgDrift 30s ease-in-out infinite alternate;
+}
+body::after {
+  content: "";
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(130% 70% at 50% 0%, rgba(201,242,77,.07), transparent 58%);
+}
+@keyframes lgDrift {
+  0%   { transform: translate3d(0,0,0) scale(1); }
+  50%  { transform: translate3d(3%, -2%, 0) scale(1.07); }
+  100% { transform: translate3d(-2%, 3%, 0) scale(1.02); }
+}
+
+body { background: #0b0e06; }
+body .topbar {
+  background: rgba(16,20,8,.55);
+  backdrop-filter: blur(20px) saturate(170%);
+  -webkit-backdrop-filter: blur(20px) saturate(170%);
+  border-bottom: 1px solid rgba(255,255,255,.10);
+}
+body .panel,
+body .stat-card,
+body .setup-panel,
+body .table-wrap {
+  background-color: rgba(255,255,255,.05);
+  background-image: radial-gradient(260px circle at var(--mx,50%) var(--my,50%), rgba(255,255,255,.12), transparent 62%);
+  backdrop-filter: blur(18px) saturate(175%);
+  -webkit-backdrop-filter: blur(18px) saturate(175%);
+  border: 1px solid rgba(255,255,255,.10);
+  box-shadow: 0 16px 40px rgba(0,0,0,.35), 0 1px 0 rgba(255,255,255,.12) inset;
+}
+body .panel { animation: lgRise .8s cubic-bezier(.2,.9,.2,1) both; }
+body .stat-card { animation: lgRise .7s cubic-bezier(.2,.9,.2,1) both; }
+body .stats-grid .stat-card:nth-child(2) { animation-delay: .08s; }
+body .stats-grid .stat-card:nth-child(3) { animation-delay: .16s; }
+body .stats-grid .stat-card:nth-child(4) { animation-delay: .24s; }
+body .status-pill, body .sample-chip, body .chip {
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.12);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+@media (prefers-reduced-motion: reduce) {
+  body::before { animation: none; }
+  body .panel, body .stat-card { animation: none !important; }
+}

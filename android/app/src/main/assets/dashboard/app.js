@@ -967,3 +967,66 @@ async function init() {
   }
 }
 init();
+
+/* ============================================================
+   Liquid glass layer - pointer specular + animated counters
+   ============================================================ */
+(function () {
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var GLASS = '.stat, .card, .ob-step, .order, .code-card, .modal-card, .panel, .stat-card, .setup-panel, .table-wrap';
+
+  document.addEventListener('pointermove', function (e) {
+    var el = e.target && e.target.closest ? e.target.closest(GLASS) : null;
+    if (!el) return;
+    var r = el.getBoundingClientRect();
+    el.style.setProperty('--mx', (e.clientX - r.left) + 'px');
+    el.style.setProperty('--my', (e.clientY - r.top) + 'px');
+  }, { passive: true });
+
+  var parseNum = function (txt) {
+    var n = parseFloat(String(txt || '').replace(/[^0-9.-]/g, ''));
+    return isFinite(n) ? n : null;
+  };
+  var fmt = window.fmt || (typeof Intl !== 'undefined' ? new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }) : null);
+  var money = window.money || function (n) { return '₹' + (fmt ? fmt.format(n) : n); };
+
+  ['statOrders', 'statRevenue', 'statProfit', 'statCost'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    var shown = parseNum(el.textContent) || 0;
+    var painting = false;
+    var raf = null;
+
+    var paint = function (v) {
+      painting = true;
+      el.textContent = id === 'statOrders' ? fmt.format(Math.round(v)) : money(v);
+      painting = false;
+    };
+
+    new MutationObserver(function () {
+      if (painting) return;
+      var next = parseNum(el.textContent);
+      if (next == null || next === shown) return;
+      var from = shown;
+      shown = next;
+
+      el.classList.remove('bump');
+      void el.offsetWidth;
+      el.classList.add('bump');
+
+      if (reduce) { paint(next); return; }
+      if (raf) cancelAnimationFrame(raf);
+      var t0 = performance.now();
+      var dur = 550;
+      painting = true;
+      var step = function (t) {
+        var k = Math.min(1, (t - t0) / dur);
+        var e = 1 - Math.pow(1 - k, 3);
+        el.textContent = id === 'statOrders' ? fmt.format(Math.round(from + (next - from) * e)) : money(from + (next - from) * e);
+        if (k < 1) { raf = requestAnimationFrame(step); }
+        else { painting = false; }
+      };
+      raf = requestAnimationFrame(step);
+    }).observe(el, { childList: true, characterData: true, subtree: true });
+  });
+})();
