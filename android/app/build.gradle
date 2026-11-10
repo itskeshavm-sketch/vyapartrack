@@ -11,13 +11,36 @@ android {
         applicationId 'com.vyapartrack.app'
         minSdk 24
         targetSdk 34
-        versionCode 286
-        versionName '2.8.6-phone'
+        versionCode 287
+        versionName '2.8.7-lime'
+    }
+
+    // Stable signing key so a new APK installs over the previous one
+    // instead of asking the user to uninstall first.
+    signingConfigs {
+        def ksPath = System.getenv('VT_KS_FILE')
+        if (ksPath && file(ksPath).exists()) {
+            create('vt') {
+                storeFile = file(ksPath)
+                storePassword = System.getenv('VT_KS_PASS')
+                keyAlias = 'vyapartrack'
+                keyPassword = System.getenv('VT_KS_PASS')
+                storeType = 'pkcs12'
+            }
+        }
     }
 
     buildTypes {
+        debug {
+            if (signingConfigs.findByName('vt') != null) {
+                signingConfig signingConfigs.vt
+            }
+        }
         release {
             minifyEnabled false
+            if (signingConfigs.findByName('vt') != null) {
+                signingConfig signingConfigs.vt
+            }
         }
     }
 
