@@ -37,11 +37,13 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         // Immersive, edge-to-edge feel
-        getWindow().setStatusBarColor(Color.parseColor("#0e1207"));
-        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+        getWindow().setStatusBarColor(Color.parseColor("#ffffff"));
+        int uiFlags = View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+        if (Build.VERSION.SDK_INT >= 26) uiFlags |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+        getWindow().getDecorView().setSystemUiVisibility(uiFlags);
 
         FrameLayout root = new FrameLayout(this);
-        root.setBackgroundColor(Color.parseColor("#0e1207"));
+        root.setBackgroundColor(Color.parseColor("#f4f7fb"));
 
         webView = new WebView(this);
         WebSettings s = webView.getSettings();
@@ -59,7 +61,7 @@ public class MainActivity extends Activity {
         s.setSupportZoom(false);
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
 
-        webView.setBackgroundColor(Color.parseColor("#0e1207"));
+        webView.setBackgroundColor(Color.parseColor("#f4f7fb"));
         webView.setWebChromeClient(new WebChromeClient());
         webView.setWebViewClient(new WebViewClient());
 

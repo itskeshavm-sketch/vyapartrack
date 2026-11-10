@@ -1,25 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- VyaparTrack adaptive icon foreground: chat bubble with a rupee inside. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-
-    <path
-        android:pathData="M40 20 H68 A16 16 0 0 1 84 36 V50 A16 16 0 0 1 68 66 H52 L38 78 V66 H40 A16 16 0 0 1 24 50 V36 A16 16 0 0 1 40 20 Z"
-        android:fillColor="#00000000"
-        android:strokeColor="#C9F24D"
-        android:strokeWidth="5.5"
-        android:strokeLineJoin="round" />
-
+        <!-- rupee -->
     <group
-        android:scaleX="0.56522"
-        android:scaleY="0.56522"
-        android:translateX="23.48"
-        android:translateY="16.78">
+        android:scaleX="0.652"
+        android:scaleY="0.652"
+        android:translateX="6.8"
+        android:translateY="25.8">
         <path
             android:pathData="M31.05 25.59H54.17Q53.78 23.77 52.87 22.27Q51.96 20.77 50.31 19.71Q48.66 18.65 46.23 18.08Q43.79 17.52 40.45 17.52H31L31.05 9.45H76.95V17.52H62.19Q63.62 19.09 64.53 21.11Q65.44 23.13 65.73 25.59H77V33.61H65.49Q64.36 39.02 60.25 42.9Q56.14 46.79 49.79 48.22V48.41Q51.47 49.2 52.89 50.24Q54.32 51.27 55.65 52.65Q56.98 54.02 58.28 55.79Q59.58 57.57 61.06 59.78L74.34 80H61.26L50.04 61.85Q48.42 59.19 46.96 57.2Q45.51 55.2 43.87 53.88Q42.22 52.55 40.22 51.88Q38.23 51.22 35.58 51.22H31.05V42.66H40.4Q42.91 42.66 45.17 41.99Q47.43 41.33 49.23 40.13Q51.02 38.92 52.28 37.27Q53.53 35.62 54.07 33.61H31.05Z"
-            android:fillColor="#C9F24D" />
+            android:fillColor="#1F9E7A" />
     </group>
+
+    <!-- growth arrow -->
+    <path
+        android:pathData="M38 84 L54 62 L64 70 L80 44"
+        android:strokeColor="#F59E0B"
+        android:strokeWidth="9"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M83.1 38.9 L79.1 64.5 L62.1 54.1 Z"
+        android:fillColor="#F59E0B" />
+
 </vector>

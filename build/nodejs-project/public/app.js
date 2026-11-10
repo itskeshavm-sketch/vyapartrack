@@ -210,8 +210,8 @@ $('orderForm').addEventListener('submit', async (e) => {
     result.className = 'form-result ok';
     result.innerHTML =
       `✅ <b>${escapeHtml(order.customer)}</b> — ${order.quantity ?? '—'}${order.unit ? ' ' + order.unit : ''} ${escapeHtml(order.item)} · ` +
-      `Cost <b>${money(order.costPrice)}</b> · Profit <b style="color:#c9f24d">${money(order.profitAmount)}</b> (${order.profitPercent ?? '—'}%) · ` +
-      `Total <b style="color:#f5b642">${money(order.totalAmount)}</b>`;
+      `Cost <b>${money(order.costPrice)}</b> · Profit <b style="color:#1f9e7a">${money(order.profitAmount)}</b> (${order.profitPercent ?? '—'}%) · ` +
+      `Total <b style="color:#f59e0b">${money(order.totalAmount)}</b>`;
     input.value = '';
     await Promise.all([refreshOrders(), refreshStats()]);
   } catch (err) {

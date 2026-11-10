@@ -318,7 +318,7 @@ $('orderForm').addEventListener('submit', async (e) => {
     saveLocalOrders(orders);
     renderAll();
     result.className = 'result ok';
-    result.innerHTML = `✓ <b>${escapeHtml(order.customer)}</b> — ${order.quantity ?? '—'}${order.unit ? ' ' + order.unit : ''} ${escapeHtml(order.item)} · कुल <b style="color:#f5c66b">${money(order.totalAmount)}</b>`;
+    result.innerHTML = `✓ <b>${escapeHtml(order.customer)}</b> — ${order.quantity ?? '—'}${order.unit ? ' ' + order.unit : ''} ${escapeHtml(order.item)} · कुल <b style="color:#f59e0b">${money(order.totalAmount)}</b>`;
     $('orderText').value = '';
   } catch (err) {
     result.className = 'result err';
@@ -523,12 +523,13 @@ function reportWindow() {
 }
 
 const PIE_BY_THEME = {
-  midnight: ['#c9f24d', '#f5c66b', '#c9b8ff', '#6ec5ff', '#ff9d8a', '#e4f7b0', '#e08ac9'],
-  bazaar: ['#c0392b', '#e8930c', '#1d7a4c', '#8a6d3b', '#d35400', '#7d3c98', '#2e86c1'],
-  munim: ['#1d7a4c', '#d7ff63', '#e8930c', '#2e86c1', '#7d3c98', '#8e9a7e', '#c0392b'],
+  midnight: ['#1f9e7a', '#f59e0b', '#6d5bd0', '#6ec5ff', '#ff9d8a', '#12805f', '#e08ac9'],
+  bazaar: ['#c0392b', '#ea8a04', '#1d7a4c', '#8a6d3b', '#d35400', '#7d3c98', '#2e86c1'],
+  munim: ['#1d7a4c', '#17a37c', '#ea8a04', '#2e86c1', '#7d3c98', '#5b6b85', '#c0392b'],
 };
 const THEME_KEY = 'vyapartrack.theme.v1';
-function getTheme() { return localStorage.getItem(THEME_KEY) || 'midnight'; }
+PIE_BY_THEME.white = PIE_BY_THEME.midnight;
+function getTheme() { return localStorage.getItem(THEME_KEY) || 'white'; }
 function applyTheme(t) {
   document.body.dataset.theme = t;
   try { localStorage.setItem(THEME_KEY, t); } catch {}

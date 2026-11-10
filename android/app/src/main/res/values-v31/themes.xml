@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="AppTheme" parent="@android:style/Theme.Material.NoActionBar">
+    <style name="AppTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@color/vt_bg</item>
-        <item name="android:statusBarColor">@color/vt_bg</item>
-        <item name="android:navigationBarColor">@color/vt_bg</item>
-        <item name="android:windowLightStatusBar">false</item>
-        <item name="android:windowSplashScreenBackground">@color/vt_bg</item>
+        <item name="android:statusBarColor">@color/vt_surface</item>
+        <item name="android:navigationBarColor">@color/vt_surface</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:windowSplashScreenBackground">@color/vt_surface</item>
         <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
     </style>
 </resources>
