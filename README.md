@@ -165,7 +165,3 @@ scripts/         demo launcher, parser tests, smoke test, seeders
 server/          standalone hosted WhatsApp server (Render)
 android/         Android app source and on-phone engine
 ```
-
-## Disclaimer
-
-Linking a personal WhatsApp account through an unofficial client (zapo-js, same general mechanism as WhatsApp Web) is not endorsed by WhatsApp. Use it with the vendor's own account and data, and prefer the official WhatsApp Business Cloud API for production or high-volume use.
