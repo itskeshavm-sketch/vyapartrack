@@ -57,10 +57,14 @@ function createApp(botStatusFn, pairFn) {
   return app;
 }
 
-function startServer(port, botStatusFn, pairFn) {
+function startServer(port, botStatusFn, pairFn, host) {
   const app = createApp(botStatusFn, pairFn);
+  // Bind to loopback only: the desktop server has no login, so anyone on the
+  // same Wi-Fi (café, college, office) could read the shop's orders and API
+  // token. Set HOST=0.0.0.0 in .env only if you understand that.
+  const bindHost = host || process.env.HOST || '127.0.0.1';
   return new Promise((resolve, reject) => {
-    const server = app.listen(port, () => resolve(server));
+    const server = app.listen(port, bindHost, () => resolve(server));
     server.on('error', reject);
   });
 }
@@ -69,8 +73,9 @@ module.exports = { createApp, startServer };
 
 if (require.main === module) {
   const port = parseInt(process.env.PORT || '3000', 10);
-  startServer(port, () => ({ connected: false, note: 'dashboard-only mode (run "npm start" to connect WhatsApp)' }))
-    .then(() => console.log(`Dashboard running at http://localhost:${port}`))
+  const host = process.env.HOST || '127.0.0.1';
+  startServer(port, () => ({ connected: false, note: 'dashboard-only mode (run "npm start" to connect WhatsApp)' }), null, host)
+    .then(() => console.log(`Dashboard running at http://${host === '0.0.0.0' ? 'localhost' : host}:${port}`))
     .catch((err) => {
       console.error('Server failed to start:', err.message);
       process.exit(1);

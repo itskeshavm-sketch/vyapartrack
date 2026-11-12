@@ -11,6 +11,9 @@ const { startServer } = require('./server');
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const NO_BOT = process.env.NO_BOT === 'true';
+// Loopback by default - the desktop dashboard has no login, so it must not be
+// reachable from other machines on the same network.
+const HOST = process.env.HOST || '127.0.0.1';
 
 function loadBot() {
   if (NO_BOT) return null;
@@ -38,9 +41,9 @@ async function main() {
   });
   const pairFn = bot ? bot.requestPairingCode : null;
 
-  await startServer(PORT, statusFn, pairFn);
+  await startServer(PORT, statusFn, pairFn, HOST);
 
-  console.log(`\n  📊 Dashboard : http://localhost:${PORT}`);
+  console.log(`\n  📊 Dashboard : http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`);
   console.log(`  🧮 Parser    : offline (Hinglish + native scripts)`);
   console.log(`  💬 WhatsApp  : ${NO_BOT ? 'disabled (NO_BOT=true)' : bot ? 'starting…' : 'unavailable'}\n`);
 
