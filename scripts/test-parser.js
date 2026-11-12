@@ -104,5 +104,42 @@ for (const text of mustReject) {
   assert(!r, `rejected: "${text}"`);
 }
 
+// ---- False-positive guards -------------------------------------------------
+// These messages contain a number but are NOT orders. A number-blind parser
+// used to record them as sales.
+const notOrders = [
+  'I need 5 minutes',                   // the 5 is a duration, not a quantity
+  'sold my bike for 40000',             // a number with no product at all
+  'kitne ka hai ye 1kg wala?',          // a price question, not an order
+  'meeting at 5, I want 2 chairs ready', // a time, not an order
+];
+for (const text of notOrders) {
+  const r = parseOrder(text);
+  console.log('\nMSG :', text);
+  console.log(r ? '->  PARSED (unexpected!)' : '->  rejected (not an order)');
+  assert(!r, `rejected (false positive): "${text}"`);
+}
+
+// ...and real orders that look similar must still be recorded.
+const realOrders = [
+  ['bhai 10 laddu chahiye', { quantity: 10, item: 'laddu' }],
+  ['500g ladoo bhejo, cost 200, profit 15%', { quantity: 500, unit: 'g', item: 'ladoo', costPrice: 200, profitPercent: 15 }],
+  ['aadha kilo besan chahiye', { quantity: 0.5, unit: 'kg', item: 'besan' }],
+  ['500 ग्राम लड्डू चाहिए', { quantity: 500, unit: 'g', item: 'लड्डू' }],
+];
+for (const [text, want] of realOrders) {
+  const r = parseOrder(text);
+  console.log('\nMSG :', text);
+  console.log(r
+    ? '->  ' + JSON.stringify({ item: r.item, quantity: r.quantity, unit: r.unit, costPrice: r.costPrice, profitPercent: r.profitPercent })
+    : '->  REJECTED (unexpected!)');
+  assert(!!r, `accepted: "${text}"`);
+  if (r) {
+    for (const [key, value] of Object.entries(want)) {
+      assert(r[key] === value, `"${text}": ${key} is ${JSON.stringify(r[key])}, expected ${JSON.stringify(value)}`);
+    }
+  }
+}
+
 console.log(`\n=== Parser checks: ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);

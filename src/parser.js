@@ -153,6 +153,70 @@ const UNIT_NORMALIZE = {
 
 const ITEM_TAIL_STOP = /\s+(?:mange|mangwaya|mangaye|chahiye|bhejo|bhejna|bhej|dena|dein|deo|karo|krdo|please|ke\s+liye|pahije|pathva|banvun|kavali|beku|venam|venum|chahida|joie|kalisi|kaluhisi|anuppunga|pampandi|kudunga|tharu|pathan|din|dya|venam|bana do|bana dena|de do|de dena|bhej do|bhej dena|taiyar kar do|pack kar do|pathavun dya|banvun dya|pathiye din|baniye din|pack kore din|rekhe din|ready pannunga|pack pannunga|pampincheyandi|ivvandi|ready cheyandi|pack cheyandi|ready madi|pack madi|ittu kodi|madi kodi|ayachu tharu|ayach tharu|cheithu tharu|undakki tharu|pack cheythu|mokli do|mokli aapo|aapi do|banavi aapo|ready kari do|pack kari do|rakhi do|bhej deo|bana deo|de deo|tyaar kar deo|ready kar deo|pack kar deo|rakh deo|bhej dein|de dein|bana dein|tayyar kar dein|delivery kar do)\b.*$/i;
 
+// ---- False-positive guards (offline + deterministic) -----------------------
+// A number in a chat message is not automatically a quantity. Four rules
+// reject the non-orders a business inbox sees every day:
+//   1. ENQUIRY_RE      - the customer is asking a price ("kitne ka hai?")
+//   2. TIME_RE         - the number is a time ("I need 5 minutes", "meeting at 5")
+//   3. BAD_ITEM_WORDS  - the extracted "item" is a time word or filler ("1kg wala?")
+//   4. bare number     - a number with no product at all ("sold my bike for 40000")
+const ENQUIRY_RE = new RegExp(
+  '\\b(?:kitne\\s*ka|kitna\\s*ka|kitne\\s*ka\\s*hoga|kitne\\s*mein|kitna\\s*lagega|rate\\s*kya|rate\\s*batao|price\\s*kya|price\\s*batao|bhav\\s*batao|bhao\\s*kya|qeemat\\s*kya|dam\\s*kya|mrityu\\s*kya|total\\s*kitna|total\\s*koto|total\\s*kiti|bhav\\s*kay|rate\\s*sanga|kimmat\\s*sanga|kinne\\s*da\\s*pavega|kinne\\s*nu\\s*milega|kinne\\s*da\\s*aa|kinne\\s*paise|total\\s*kinna|rate\\s*ki\\s*aa|bhav\\s*ki\\s*aa|price\\s*kinne\\s*di|rate\\s*koto|koto\\s*hobe|koto\\s*porbe|dam\\s*koto|koto\\s*taka)\\b',
+  'i'
+);
+// The same price questions in native scripts, kept separate from
+// NATIVE_INTENT so a question can be rejected instead of becoming an order.
+const NATIVE_ENQUIRY = [
+  'कितने का', 'कितने में', 'कितना लगेगा', 'भाव बताओ', 'रेट क्या', 'प्राइस बताओ', 'टोटल कितना',
+  'किती पडेल', 'किती होईल', 'भाव काय', 'रेट सांगा', 'किंमत सांगा', 'टोटल किती',
+  'কত পড়বে', 'কত হবে', 'দাম কত', 'কত টাকা', 'টোটল কত',
+  'எவ்வளவு ஆகும்', 'எவ்வளவு வரும்', 'ரேட் என்ன', 'விலை என்ன', 'டோட்டல் எவ்வளவு',
+  'ఎంత అవుతుంది', 'ఎంత పడుతుంది', 'రేట్ ఎంత', 'ధర ఎంత', 'టోటల్ ఎంత',
+  'ಎಷ್ಟು ಆಗುತ್ತೆ', 'ಎಷ್ಟು ಬರುತ್ತೆ', 'ಬೆಲೆ ಎಷ್ಟು', 'ರೇಟ್ ಎಷ್ಟು', 'ಟೋಟಲ್ ಎಷ್ಟು',
+  'എത്ര ആകും', 'എത്ര വരും', 'വില എത്ര', 'റേറ്റ് എത്ര', 'ടോട്ടൽ എത്ര',
+  'કેટલા થશે', 'કેટલું પડશે', 'ભાવ કેટલો', 'રેટ કેટલો', 'ટોટલ કેટલું',
+  'ਕਿੰਨੇ ਦਾ', 'ਕਿੰਨੇ ਪੈਸੇ', 'ਰੇਟ ਕੀ', 'ਭਾਅ ਕੀ', 'ਟੋਟਲ ਕਿੰਨਾ',
+  'کتنے کا', 'کتنے میں', 'کتنا لگے گا', 'قیمت کیا', 'بھاؤ کیا', 'ٹوٹل کتنا',
+];
+const NATIVE_ENQUIRY_RE = new RegExp(`${B}(?:${NATIVE_ENQUIRY.join('|')})${A}`, 'u');
+// Time context. "at 5" is only a time when no unit follows it ("at 5 kg" is an order).
+const TIME_RE = new RegExp(
+  '\\b(?:meeting|meetings|reunion|appointment|reminder)\\b' +
+  '|\\bat\\s+\\d{1,2}\\b(?!\\s*(?:kg|kgs|g|gm|gms|gram|grams|l|litre|litres|liter|ml|pcs|pieces|piece|pc|dozen|darjan|ta))' +
+  '|\\b\\d{1,2}\\s*(?:baje|pm|am|o.clock)\\b' +
+  '|\\b\\d+\\s*(?:minutes?|mins?|hours?|hrs?|seconds?|secs?)\\b',
+  'i'
+);
+// Words that can never be a product. If EVERY word of the extracted item is
+// on this list, the number was not a quantity.
+const BAD_ITEM_WORDS = new Set([
+  // time
+  'minute', 'minutes', 'min', 'mins', 'hour', 'hours', 'hr', 'hrs', 'second', 'seconds', 'sec', 'secs',
+  'day', 'days', 'din', 'dinon', 'week', 'weeks', 'hafte', 'month', 'months', 'mahina', 'mahine',
+  'year', 'years', 'saal', 'baje', 'ghanta', 'ghante', 'waqt', 'time', 'times',
+  'meeting', 'call', 'appointment', 'schedule', 'birthday', 'party', 'invite',
+  'morning', 'evening', 'raat', 'subah', 'sham',
+  // prepositions
+  'for', 'from', 'to', 'in', 'on', 'at', 'by', 'with', 'without', 'of', 'about', 'after', 'before',
+  'until', 'while', 'per', 'into', 'onto', 'upon', 'via',
+  // Hinglish particles / filler
+  'ka', 'ki', 'ke', 'ko', 'se', 'mein', 'me', 'par', 'aur', 'ya', 'phir', 'bhi', 'hi', 'tak',
+  'wala', 'wali', 'wale', 'walon', 'waala', 'jaldi', 'abhi', 'aaj', 'kal', 'parso',
+  'sab', 'sabhi', 'thoda', 'kam', 'zyada', 'bas', 'sirf', 'only', 'please', 'ready', 'now', 'then',
+  'and', 'or', 'but', 'not', 'no', 'so', 'if', 'as', 'is', 'am', 'are', 'was', 'were',
+  'the', 'this', 'that', 'it', 'i', 'you', 'he', 'we', 'they', 'my', 'our', 'your', 'us', 'them', 'out',
+  'all', 'any', 'some', 'does', 'did', 'have', 'has', 'had', 'will', 'would', 'can', 'could',
+  'should', 'may', 'might', 'must', 'shall', 'upto',
+]);
+
+/** True when the extracted item is made only of time words / filler. */
+function isBadItem(item) {
+  if (!item) return false;
+  const words = item.toLowerCase().split(/[\s,.;!?]+/).filter(Boolean);
+  if (!words.length) return false;
+  return words.every((w) => BAD_ITEM_WORDS.has(w));
+}
+
 function toNum(v) {
   const n = parseFloat(v);
   return Number.isFinite(n) ? n : null;
@@ -282,12 +346,28 @@ function matchBareNumber(text) {
  */
 function parseOrder(text) {
   if (!text) return null;
-  const customer = extractCustomer(text);
 
   const qty = matchQuantity(text);
   const quantity = qty ? qty.quantity : null;
   const unit = qty ? qty.unit : null;
   const item = extractItem(text, qty ? qty.match : null);
+
+  // ---- false-positive guards ------------------------------------------------
+  // 1. A price question is an enquiry, not an order - unless the message also
+  //    carries a real price figure, which makes it a sale.
+  const hasMoney =
+    COST_RE.test(text) || PROFIT_PCT_RE.test(text) || PROFIT_PCT_WORD_RE.test(text) ||
+    PROFIT_AMT_RE.test(text) || TOTAL_RE.test(text);
+  if (!hasMoney && (ENQUIRY_RE.test(text) || NATIVE_ENQUIRY_RE.test(text))) return null;
+  // 2. The number is a time, not a quantity ("I need 5 minutes", "meeting at 5").
+  //    Only checked when no unit was found: "2 kg" is a quantity, "at 5" is a clock.
+  if (!unit && TIME_RE.test(text)) return null;
+  // 3. The extracted item is a time word or filler ("1kg wala?").
+  if (isBadItem(item)) return null;
+  // 4. A bare number with no product at all ("sold my bike for 40000").
+  if (qty && qty.bare && (!item || !item.trim())) return null;
+
+  const customer = extractCustomer(text);
 
   // A bare "500g sugar" (quantity + item, no intent word) is treated as an order
   // too - this is a business inbox, not general chat. The old intent-only gate
