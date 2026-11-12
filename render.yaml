@@ -13,7 +13,7 @@ services:
       - key: API_TOKEN
         generateValue: true
       - key: AUTO_REPLY
-        value: "true"
+        value: "false"
     disk:
       name: vyapar-data
       mountPath: /opt/render/project/src/server/data

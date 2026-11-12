@@ -30,7 +30,8 @@ git push -u origin main
    - **Plan:** Free
 4. Add environment variables:
    - `API_TOKEN` — Render generates one automatically from `render.yaml`; or paste a strong random string
-   - `AUTO_REPLY` — `true` (default)
+   - `AUTO_REPLY` — `false` (default). Set it to `true` only if you accept the risk of automated replies from an unofficial connection (see the Risks section in `README.md`).
+   - `ALLOW_GROUP_CHATS` — `false` (default). Group messages are ignored.
 5. Click **Create Web Service** and wait for the first build.
 
 > Use the repo root, not `server/` alone: `server/server.js` imports the shared parser from `src/parser.js`.

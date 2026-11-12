@@ -22,6 +22,16 @@ const AUTH_DIR = process.env.VYAPAR_AUTH_DIR || path.join(__dirname, 'auth');
 const STORE_PATH = process.env.VYAPAR_AUTH_DB || path.join(AUTH_DIR, 'zapo.db');
 const API_TOKEN = process.env.API_TOKEN || crypto.randomBytes(24).toString('hex');
 
+// Group chats are ignored by default - a group message is not a customer
+// order and replying inside a group messages everyone in it.
+// Set ALLOW_GROUP_CHATS=true to opt back in.
+const ALLOW_GROUP_CHATS = /^(1|true|yes|on)$/i.test(String(process.env.ALLOW_GROUP_CHATS || '').trim());
+
+// Automated replies are OFF by default: replying automatically from an
+// unofficial WhatsApp connection is what makes WhatsApp flag the number.
+// Set AUTO_REPLY=true to switch it on deliberately.
+const AUTO_REPLY = /^(1|true|yes|on)$/i.test(String(process.env.AUTO_REPLY || '').trim());
+
 fs.mkdirSync(DATA_DIR, { recursive: true });
 fs.mkdirSync(AUTH_DIR, { recursive: true });
 
@@ -555,6 +565,8 @@ async function startBot() {
       // Ignore newsletters/channels and broadcast statuses - marketing posts
       // there were being parsed as phantom orders.
       if (chatJid === 'status@broadcast' || chatJid.endsWith('@broadcast') || chatJid.endsWith('@newsletter')) return;
+      // Group chat (JIDs ending in @g.us) - ignored unless ALLOW_GROUP_CHATS=true.
+      if (!ALLOW_GROUP_CHATS && chatJid.endsWith('@g.us')) return;
 
       const proto = event.message || {};
       const text = proto.conversation
@@ -579,7 +591,7 @@ async function startBot() {
       const rec = await recordParsedOrder(order, senderName, senderJid);
       console.log(`[bot] Order: ${rec.customer} | from ${senderJid} pushName=${event.pushName || 'none'} | ${rec.quantity ?? ''}${rec.unit ?? ''} ${rec.item} | total ${rec.totalAmount ?? '-'}`);
 
-      if (process.env.AUTO_REPLY !== 'false') {
+      if (AUTO_REPLY) {
         const pricedReply = rec.totalAmount != null;
         await client.message.send(chatJid, {
           type: 'text',

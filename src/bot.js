@@ -41,6 +41,12 @@ const STORE_PATH = process.env.VYAPAR_AUTH_DB || path.join(__dirname, '..', 'aut
 // opt back in.
 const ALLOW_GROUP_CHATS = /^(1|true|yes|on)$/i.test(String(process.env.ALLOW_GROUP_CHATS || '').trim());
 
+// Automated replies are OFF by default. Replying automatically from an
+// unofficial WhatsApp connection is exactly the pattern WhatsApp flags, so a
+// wrong number can get the shop's number restricted. Turn it on deliberately
+// with AUTO_REPLY=true in .env.
+const AUTO_REPLY = /^(1|true|yes|on)$/i.test(String(process.env.AUTO_REPLY || '').trim());
+
 let client = null;
 let connectPromise = null;
 
@@ -257,7 +263,7 @@ async function startBot(onOrderRecorded) {
       console.log(`[bot] Order tracked: ${record.customer} | ${record.quantity ?? ''}${record.unit ?? ''} ${record.item} | cost ${record.costPrice ?? '-'} | profit ${record.profitAmount ?? '-'} (${record.profitPercent ?? '-'}%) | total ${record.totalAmount ?? '-'}`);
       if (onOrderRecorded) onOrderRecorded(record);
 
-      if (process.env.AUTO_REPLY !== 'false') {
+      if (AUTO_REPLY) {
         await client.message.send(chatJid, {
           type: 'text',
           text: record.totalAmount != null

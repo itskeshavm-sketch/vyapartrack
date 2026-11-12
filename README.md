@@ -88,8 +88,10 @@ The offline parser handles:
 | Variable | Default | Purpose |
 |---|---|---|
 | `PORT` | `3000` | Dashboard/API port |
+| `HOST` | `127.0.0.1` | Address the desktop server binds to (loopback only by default) |
 | `NO_BOT` | `false` | `true` = dashboard only, never connect to WhatsApp |
-| `AUTO_REPLY` | `true` | Send a short order confirmation to the customer |
+| `AUTO_REPLY` | `false` | Send a short order confirmation to the customer (off by default - see [Risks](#risks)) |
+| `ALLOW_GROUP_CHATS` | `false` | Record orders sent inside WhatsApp groups (off by default) |
 | `VYAPAR_DATA_DIR` | `./data` | Where orders/contacts are stored |
 
 All order parsing is local and deterministic, so there are no AI keys or model settings to configure. Keep `.env` out of git.
