@@ -35,6 +35,12 @@ const store = require('./store');
 // Session db can be overridden (Android APK stores it outside the bundled engine)
 const STORE_PATH = process.env.VYAPAR_AUTH_DB || path.join(__dirname, '..', 'auth', 'zapo.db');
 
+// Group chats are ignored by default. A message in a group is not a customer
+// order - it is usually a friend chatting - and replying inside a group sends
+// the confirmation to everyone in it. Set ALLOW_GROUP_CHATS=true in .env to
+// opt back in.
+const ALLOW_GROUP_CHATS = /^(1|true|yes|on)$/i.test(String(process.env.ALLOW_GROUP_CHATS || '').trim());
+
 let client = null;
 let connectPromise = null;
 
@@ -143,6 +149,7 @@ async function startBot(onOrderRecorded) {
 
   const logger = pino({ level: process.env.WA_DEBUG === '1' ? 'debug' : 'error' });
   client = new WaClient({ store: zapoStore, sessionId: 'default', logger });
+  console.log(`[bot] group chats: ${ALLOW_GROUP_CHATS ? 'allowed (ALLOW_GROUP_CHATS=true)' : 'ignored'}`);
 
   // QR fallback: rendered into the dashboard whenever the device is unpaired
   client.on('auth_qr', async ({ qr }) => {
@@ -221,6 +228,8 @@ async function startBot(onOrderRecorded) {
       const chatJid = String(key.remoteJid || '');
       if (!chatJid || key.fromMe) return;
       if (chatJid === 'status@broadcast' || chatJid.endsWith('@broadcast') || chatJid.endsWith('@newsletter')) return;
+      // Group chat (JIDs ending in @g.us) - ignored unless ALLOW_GROUP_CHATS=true.
+      if (!ALLOW_GROUP_CHATS && chatJid.endsWith('@g.us')) return;
 
       const proto = event.message || {};
       const text =
