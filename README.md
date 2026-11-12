@@ -109,6 +109,18 @@ This runs:
 
 The smoke test never touches your real `data/orders.json`.
 
+## ⚠️ Risks
+
+**VyaparTrack connects to WhatsApp through an unofficial client (`zapo-js`), not the official API.** That matters, so please read this before pointing it at a real shop:
+
+- **The number can get restricted.** WhatsApp's terms allow only official clients (WhatsApp Business API) to connect. When their systems see an unofficial connection - especially one that replies automatically or looks like bulk messaging - they can ban or restrict the number. A restricted number stops the shop taking orders on WhatsApp, which is the shop's whole business.
+- **Use a number you can afford to lose.** Do not link your personal number, your main business number, or a number whose customer list you cannot rebuild. Link a separate, low-stakes number for the demo or the pilot.
+- **Automated replies are off by default** (`AUTO_REPLY=false`). Every automatic reply is another signal that this is not a real customer service agent. Turn it on only for a test, and keep it off for a live shop.
+- **Group chats are ignored by default** (`ALLOW_GROUP_CHATS=false`). Replying inside a group messages everyone in it, and group chatter is not an order.
+- **The safer route is the official WhatsApp Business API.** It is the only supported way to connect a business to WhatsApp, it gives you a proper Business profile and verified badge, and it will not get the number restricted for using it. VyaparTrack's parser, dashboard and Android app are independent of the connection - swapping the unofficial link for the Business API later is a small change to the login part, not a rewrite.
+- **Never put the server API token inside the APK.** An APK is a public file; anyone can unzip it and read the token. Type it into the app's Settings screen instead - see `DEPLOY.md`.
+- **The desktop server binds to `127.0.0.1` only** and has no login, so it is not reachable from other machines on your network. Do not change `HOST` to `0.0.0.0` on a shared Wi-Fi.
+
 ## REST API (dashboard server)
 
 | Method | Path | Body | Returns |

@@ -46,13 +46,18 @@ API token (save it!): a1b2c3d4e5f6...
 
 Copy the token. The service URL is shown at the top, e.g. `https://vyapartrack-xxxx.onrender.com`.
 
-## 4. Bake the values into the APK (optional)
+## 4. Point the app at your server (do not bake in the token)
 
-To avoid showing Settings to demo users, edit `android/app/src/main/assets/dashboard/app.js`:
+Open the app's **Settings** screen and paste the server URL and the API token there. The app keeps them on the phone and sends the token in the `X-API-Token` header.
+
+**Do not hard-code the token into the APK.** An APK is a public file: anyone who downloads it can unzip it and read the token out of `assets/dashboard/app.js` in a few seconds. A leaked token means anyone can read the shop's orders and write fake ones.
+
+If you want to pre-fill the server URL (that part is not secret), edit `android/app/src/main/assets/dashboard/app.js`:
 
 ```js
 const DEFAULT_SERVER_URL = 'https://vyapartrack-xxxx.onrender.com';
-const DEFAULT_API_TOKEN = 'a1b2c3d4e5f6...';
+// leave DEFAULT_API_TOKEN empty - the shop types it in once
+const DEFAULT_API_TOKEN = '';
 ```
 
 Then rebuild from the repo root:
@@ -65,7 +70,7 @@ gradle :app:assembleDebug
 
 APK output: `android/app/build/outputs/apk/debug/app-debug.apk`. Copy it to the phone and install. You need JDK 17+, `ANDROID_HOME`, and the NDK configured in `android/app/build.gradle`.
 
-> You do not need a local SDK: push to `main` and the **Build Android APK** GitHub Actions workflow builds the APK and attaches it to the run. The current installable build is published as a release: [VyaparTrack-2.8.7-lime-debug.apk](https://github.com/itskeshavm-sketch/vyapartrack/releases/download/v2.9.2/VyaparTrack-2.9.2-white-debug.apk).
+> You do not need a local SDK: push to `main` and the **Build Android APK** GitHub Actions workflow builds the APK and attaches it to the run. The current installable build is published as a release: [VyaparTrack-2.9.2-white-debug.apk](https://github.com/itskeshavm-sketch/vyapartrack/releases/download/v2.9.2/VyaparTrack-2.9.2-white-debug.apk).
 
 ## 5. Keep the free server awake
 
